@@ -1,0 +1,5 @@
+{
+  "name": "pb-codegraph",
+  "version": "0.1.0",
+  "description": "Magento 2 / Mage-OS impact analysis. Detects what depends on code about to change — callers, plugin chains, observers, cron data dependencies — before a deploy ships. Companion to pb-graphiti: pb-codegraph owns code structure & blast radius; pb-graphiti owns the why."
+}

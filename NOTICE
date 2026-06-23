@@ -1,0 +1,22 @@
+pb-codegraph
+Copyright (c) 2026 Lucas van Staden / Proxiblue
+https://github.com/ProxiBlue/pb-codegraph
+
+This product includes software developed by
+Lucas van Staden / Proxiblue (https://www.proxiblue.com.au).
+
+------------------------------------------------------------------------
+
+This plugin orchestrates existing third-party tools (the `magento2-lsp`
+MCP server, the `gh` CLI, standard shell utilities, and an LLM via the
+Claude Code runtime). None of those tools are bundled or redistributed
+in this repository — consumers install them themselves.
+
+pb-codegraph is the companion plugin to pb-graphiti
+(https://github.com/ProxiBlue/pb-graphiti), with separated concerns:
+
+  * pb-codegraph — code structure + blast radius (what calls what)
+  * pb-graphiti — intent + why (decision history, vendor verdicts)
+
+See README.md for full design notes and the roadmap to a deterministic
+tree-sitter symbol graph in v0.2+.
