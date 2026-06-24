@@ -125,4 +125,8 @@ The prior tool that gave us this capability ships under a commercial license. Th
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+Apache License 2.0 — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
+
+Copyright (c) 2026 Lucas van Staden / Proxiblue.
+
+**Attribution is required.** Redistributors and forks MUST preserve the `LICENSE`, `NOTICE`, and copyright notices, and MUST state significant modifications in modified files (per Apache 2.0 §4). The plugin remains usable in any environment — commercial or non-commercial, embedded in proprietary stacks, forked, or modified — provided attribution is preserved.
