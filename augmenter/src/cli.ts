@@ -22,6 +22,7 @@ import {
 } from './augment.ts';
 import { loadRegistryFromEnv, loadRegistryFromPath } from '../../mcp/src/registry.ts';
 import { listRepoStatuses, type RepoStatus } from '../../mcp/src/repo-status.ts';
+import { parseVerifyWiringArgs, runVerifyWiring } from './verify-wiring.ts';
 
 export const EXIT_OK = 0;
 export const EXIT_AUGMENT_ERROR = 1;
@@ -38,13 +39,26 @@ export function usage(): string {
     '  pb-codegraph augment <project-root> [--db <path>]',
     '  pb-codegraph index <project-root>',
     '  pb-codegraph health [--registry <path>]',
+    '  pb-codegraph verify-wiring <project-root> [--db <path>] [--registry <path>] [--stamp]',
     '',
-    '  augment  Parse Magento XML wiring and inject edges into an already-indexed codegraph db.',
-    '  index    Rebuild the codegraph index (init if never indexed) then augment it — the answer',
-    '           to a codegraph reindex cascade-wiping previously-injected magento edges.',
-    '  health   Report registry-wide health as JSON (wire-probe replacement for the legacy',
-    '           curl :4747 check). Non-green when any repo is unreadable/unsupported-schema or its',
-    '           augmenter marker is stale. --registry overrides PB_CODEGRAPH_REGISTRY.',
+    '  augment        Parse Magento XML wiring and inject edges into an already-indexed codegraph db.',
+    '  index          Rebuild the codegraph index (init if never indexed) then augment it — the answer',
+    '                 to a codegraph reindex cascade-wiping previously-injected magento edges.',
+    '  health         Report registry-wide health as JSON (wire-probe replacement for the legacy',
+    '                 curl :4747 check). Non-green when any repo is unreadable/unsupported-schema or its',
+    '                 augmenter marker is stale. --registry overrides PB_CODEGRAPH_REGISTRY.',
+    '  verify-wiring  Reconcile the augmenter\'s static edges against vendor/bin/bricklayer\'s runtime',
+    '                 ObjectManager truth (spawned as an MCP stdio child process; override the spawn',
+    '                 command via PB_CODEGRAPH_BRICKLAYER_CMD). Scope: preference_for, wraps, and',
+    '                 observes ONLY — bricklayer exposes no runtime query for renders or references',
+    '                 (routes/webapi), so those two edge kinds are out of scope for this command.',
+    '                 --registry unions core/3rd-party dbs into the static side before declaring a',
+    '                 runtime fact missing-from-graph (see docs/edge-taxonomy.md). --stamp marks',
+    '                 GRAPH_ONLY edges (static-only, e.g. a disabled module) in the PROJECT db with',
+    '                 metadata.enabled_in_env=false; without --stamp it only reports them. NOTE: both',
+    '                 plugin-list and preference-list are per-target-class/interface bricklayer tools,',
+    '                 so a wraps/preference fact for a class/interface with ZERO static rows can never',
+    '                 be found missing-from-graph — only already-known targets get cross-checked.',
   ].join('\n');
 }
 
@@ -145,6 +159,15 @@ async function runHealth(rest: string[], io: CliIO): Promise<number> {
 export async function main(argv: string[], io: CliIO = defaultIO): Promise<number> {
   if (argv[0] === 'health') {
     return runHealth(argv.slice(1), io);
+  }
+
+  if (argv[0] === 'verify-wiring') {
+    const verifyArgs = parseVerifyWiringArgs(argv.slice(1));
+    if (!verifyArgs) {
+      io.error(usage());
+      return EXIT_AUGMENT_ERROR;
+    }
+    return runVerifyWiring(verifyArgs, io);
   }
 
   const parsed = parseArgs(argv);
