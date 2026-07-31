@@ -374,7 +374,20 @@ build_core_target() {
   rm -rf "$out_dir/.codegraph"
   cp -a "$scratch/.codegraph" "$out_dir/.codegraph"
 
-  log "target=$name: OK — db at $out_dir/.codegraph/codegraph.db"
+  # Core DBs are consumed over a READ-ONLY container mount. SQLite cannot open
+  # a WAL-mode db read-only on a read-only filesystem (needs -wal/-shm), so
+  # convert to DELETE journal mode after the build or every in-container open
+  # fails with "unable to open database file".
+  python3 - "$out_dir/.codegraph/codegraph.db" <<'PYEOF'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.execute("pragma wal_checkpoint(TRUNCATE)")
+mode = c.execute("pragma journal_mode=DELETE").fetchone()[0]
+c.close()
+assert mode == "delete", f"journal_mode conversion failed: {mode}"
+PYEOF
+
+  log "target=$name: OK — db at $out_dir/.codegraph/codegraph.db (journal_mode=delete for RO mounts)"
 }
 
 # --- main --------------------------------------------------------------------

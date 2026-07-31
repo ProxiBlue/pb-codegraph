@@ -261,3 +261,19 @@ pre-flight probe permanently red until pb-hcf is updated).
 
 See section 3 for the mechanism description. Commands run and their output
 are recorded in `docs/vendor-dir-verification.md`.
+
+## Field notes from the first real cutover (pps, 2026-07-31)
+
+- **Node ABI**: the augmenter/shim node_modules (better-sqlite3 native binding) must be
+  built under the SAME major Node version the ddev web container runs (v22 at time of
+  writing). Host nvm default was v20 — binding failed in-container with
+  NODE_MODULE_VERSION mismatch until host node was aligned to 22 and the seed repo's
+  node_modules rebuilt (`nvm install 22 && npm rebuild better-sqlite3` with 22 first in PATH).
+- **WAL vs read-only mounts**: build-core-indexes.sh now converts core DBs to
+  journal_mode=DELETE post-build; WAL DBs cannot be opened over the :ro mount.
+- **Core augment**: after building core indexes, run the augmenter against each core's
+  source tree so core wiring edges exist (host-side): `pb-codegraph augment vendor/mage-os
+  --db ~/.pb-codegraph/indexes/mageos/.codegraph/codegraph.db` (and hyva; deps has no
+  Magento XML — the run just stamps the marker fresh).
+- **CLI invocation in-container**: run from the seed repo dir so `--import tsx` resolves:
+  `cd /var/www/html/.claude/plugins-seed/marketplaces/pb-codegraph && node --import tsx bin/pb-codegraph.ts <cmd>`.
