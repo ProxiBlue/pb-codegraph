@@ -30,9 +30,9 @@
 #   --index-dir <dir>           Output root for built indexes.
 #                               (default: PB_CODEGRAPH_INDEX_DIR or
 #                               ~/.pb-codegraph/indexes)
-#   --ignore-source-dir <dir>   Where .gitnexusignore.<name> files live.
+#   --ignore-source-dir <dir>   Where .legacyignore.<name> files live.
 #                               (default: PB_CODEGRAPH_IGNORE_SOURCE_DIR or
-#                               ~/workspace/proxiblue/mage-os-gitnexus/index)
+#                               ~/.pb-codegraph/ignore-sources)
 #   --limit <N>                 Cap the number of files copied per vendor
 #                               subpath (smoke/testing only — never use for a
 #                               real core build).
@@ -60,7 +60,7 @@ SOURCE_DIR=""
 LIVE_BRANCH="${PB_CODEGRAPH_LIVE_BRANCH:-live}"
 ONLY_TARGETS=""
 INDEX_DIR="${PB_CODEGRAPH_INDEX_DIR:-$HOME/.pb-codegraph/indexes}"
-IGNORE_SOURCE_DIR="${PB_CODEGRAPH_IGNORE_SOURCE_DIR:-$HOME/workspace/proxiblue/mage-os-gitnexus/index}"
+IGNORE_SOURCE_DIR="${PB_CODEGRAPH_IGNORE_SOURCE_DIR:-$HOME/.pb-codegraph/ignore-sources}"
 FILE_LIMIT=""
 DRY_RUN=0
 CODEGRAPH_VERSION="${PB_CODEGRAPH_VERSION:-$DEFAULT_CODEGRAPH_VERSION}"
@@ -134,8 +134,8 @@ resolve_targets() {
 }
 
 # --- ignore conversion -------------------------------------------------------
-# Converts a `.gitnexusignore.<name>` file (git's own ignore syntax — the tool
-# GitNexus used, and the syntax codegraph's `ignore`-package-backed engine
+# Converts a `.legacyignore.<name>` file (git's own ignore syntax — the syntax
+# the legacy code-graph tool used, and the syntax codegraph's `ignore`-package-backed engine
 # also understands via a project-root .gitignore, see
 # dist/extraction/index.d.ts: "built-in defaults, merged with the project's
 # root .gitignore ... a negation there (e.g. `!vendor/`) overrides a default")
@@ -153,7 +153,7 @@ resolve_targets() {
 #      cannot pull it in — see derive_include_subpaths()).
 #   2. gitignore content — the remaining lines (comments, genuine excludes
 #      like `vendor/mage-os/language-*` or `**/Test/`) passed through
-#      verbatim, with the GitNexus-specific "blanket re-ignore everything
+#      verbatim, with the legacy-tool-specific "blanket re-ignore everything
 #      under vendor/" dance (`vendor/*`, `vendor/composer/*`, ...) dropped,
 #      because this script already scopes the physical copy to only the
 #      selected subtrees — see build_gitignore_content().
@@ -213,7 +213,7 @@ derive_include_subpaths() {
 }
 
 # Prints the .gitignore content to place at the root of the scratch export
-# for one core target, derived from the given .gitnexusignore.<name> file.
+# for one core target, derived from the given .legacyignore.<name> file.
 build_gitignore_content() {
   local ignore_file="$1"
   local line
@@ -233,7 +233,7 @@ build_gitignore_content() {
     line="${line%$'\r'}"
     # Drop the bare blanket-unignore (already emitted above unconditionally)
     # and any "vendor/.../*" single-level blanket re-ignore dance — both are
-    # a GitNexus-specific workaround for its own hardcoded vendor ignore, and
+    # a legacy-tool-specific workaround for its own hardcoded vendor ignore, and
     # this script already scopes what physically exists in the scratch dir
     # to the selected subtrees, so a bare `vendor/*` here would wrongly
     # exclude the very directory (e.g. vendor/mage-os) we copied in.
@@ -316,9 +316,9 @@ copy_vendor_subpath() {
 
 build_core_target() {
   local name="$1"
-  local ignore_file="$IGNORE_SOURCE_DIR/.gitnexusignore.$name"
+  local ignore_file="$IGNORE_SOURCE_DIR/.legacyignore.$name"
 
-  [ -f "$ignore_file" ] || die "ignore source file not found: $ignore_file (need .gitnexusignore.$name)"
+  [ -f "$ignore_file" ] || die "ignore source file not found: $ignore_file (need .legacyignore.$name)"
 
   local -a subpaths=()
   while IFS= read -r line; do

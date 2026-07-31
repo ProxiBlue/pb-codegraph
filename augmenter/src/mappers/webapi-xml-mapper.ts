@@ -1,5 +1,5 @@
-// pb-codegraph: new file (not vendored). Adapts mage-os-gitnexus's
-// parsers/webapi-xml.ts `parseAndMapWebapiXml` (GitNexus-coupled, not
+// pb-codegraph: new file (not vendored). Adapts the legacy augmenter's
+// parsers/webapi-xml.ts `parseAndMapWebapiXml` (legacy-server-coupled, not
 // vendored — see task 001 scope + _devils_advocate.md C1/C3). The vendored
 // mapper mints a route id keyed by `httpMethod:url` and strips the
 // resolver's Interface node id down to a synthetic `File:` id. This version

@@ -76,14 +76,14 @@ class Sample
 EOF
 }
 
-# --- fixture: minimal .gitnexusignore.<name> files mirroring the real ones
+# --- fixture: minimal .legacyignore.<name> files mirroring the real ones
 # structurally (blanket-vendor dance + a nested composer-style re-negation)
 # so the conversion logic is exercised the same way it would be against the
-# real files at ~/workspace/proxiblue/mage-os-gitnexus/index/.
+# real legacy ignore files (wherever --ignore-source-dir points).
 make_fixture_ignore_dir() {
   local dir="$1"
   mkdir -p "$dir"
-  cat > "$dir/.gitnexusignore.mageos" <<'EOF'
+  cat > "$dir/.legacyignore.mageos" <<'EOF'
 !vendor/
 !vendor/mage-os/
 vendor/*
@@ -92,7 +92,7 @@ vendor/mage-os/language-*
 *.md
 **/Test/
 EOF
-  cat > "$dir/.gitnexusignore.hyva" <<'EOF'
+  cat > "$dir/.legacyignore.hyva" <<'EOF'
 !vendor/
 !vendor/hyva-themes/
 vendor/*
@@ -100,7 +100,7 @@ vendor/*
 *.md
 **/Test/
 EOF
-  cat > "$dir/.gitnexusignore.deps" <<'EOF'
+  cat > "$dir/.legacyignore.deps" <<'EOF'
 !vendor/
 !vendor/laminas/
 !vendor/composer/semver/
@@ -165,8 +165,8 @@ test_never_writes_inside_source_tree() {
   ok "$name"
 }
 
-test_converts_gitnexusignore_to_codegraph_ignore() {
-  local name="it converts gitnexusignore patterns to codegraph ignore config"
+test_converts_legacyignore_to_codegraph_ignore() {
+  local name="it converts legacy ignore patterns to codegraph ignore config"
   local out
   out="$(bash "$SUT" --source "$PROJECT_DIR" --branch live \
     --ignore-source-dir "$IGNORE_DIR" --index-dir "$WORK/idx3" \
@@ -283,7 +283,7 @@ test_real_pps_hyva_vendor_node_counts() {
   local idx="$WORK/idx-real-pps"
   local out
   out="$(bash "$SUT" --source "$PPS_ROOT" --branch live \
-    --index-dir "$idx" --only hyva --limit 200 2>&1)"
+    --ignore-source-dir "$IGNORE_DIR" --index-dir "$idx" --only hyva --limit 200 2>&1)"
   local rc=$?
 
   status_after="$(git -C "$PPS_ROOT" status --porcelain)"
@@ -344,7 +344,7 @@ test_cleans_temp_dirs_on_exit_including_failure() {
 
 test_git_archive_export_no_git_dir
 test_never_writes_inside_source_tree
-test_converts_gitnexusignore_to_codegraph_ignore
+test_converts_legacyignore_to_codegraph_ignore
 test_project_ignore_template
 test_produces_queryable_db_per_core_repo
 test_real_pps_hyva_vendor_node_counts

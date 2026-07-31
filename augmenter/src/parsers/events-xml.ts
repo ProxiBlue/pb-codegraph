@@ -5,7 +5,7 @@ import { XMLParser } from 'fast-xml-parser';
 // pb-codegraph: stripped from the vendored events-xml.ts — only the pure
 // parse functions (parseSingleEventsXml, findEventsXmlFiles) are vendored.
 // parseAndMapEventsXml (the mapper body) and its NodeIdResolver/AugmentEdge
-// dependencies are GitNexus-coupled and are NOT vendored; adapted in 003b.
+// dependencies are legacy-server-coupled and are NOT vendored; adapted in 003b.
 
 export interface EventObserver {
   eventName: string;

@@ -1,4 +1,4 @@
-// pb-codegraph: new file (not vendored). Replaces mage-os-gitnexus's
+// pb-codegraph: new file (not vendored). Replaces the legacy augmenter's
 // augmenter/src/writer/lbug-writer.ts wholesale — that writer's CSV bulk
 // COPY + Cypher MERGE machinery targeted ladybugdb (the old LBUG graph
 // engine) and has no equivalent here. codegraph's storage is plain SQLite
@@ -35,7 +35,7 @@ export const MINTED_NODE_KINDS = ['event', 'route', 'template', 'external'] as c
 export type MintedNodeKind = (typeof MINTED_NODE_KINDS)[number];
 
 /**
- * Vendored mapper output shape (mage-os-gitnexus's AugmentEdge), gaining a
+ * Vendored mapper output shape (the legacy augmenter's AugmentEdge), gaining a
  * `metadata` field per task 002's plan. `type` + `reason` are remapped to a
  * LOCKED lowercase edge kind before insertion — see the kind remap table in
  * docs/edge-taxonomy.md. `confidence` is intentionally NOT part of this

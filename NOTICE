@@ -26,7 +26,7 @@ tree-sitter symbol graph in v0.2+.
 Vendored code: Magento/Mage-OS XML augmenter (augmenter/src/parsers/,
 augmenter/src/resolvers/)
 
-Source: mage-os-gitnexus/augmenter (github.com/ProxiBlue/mage-os-gitnexus,
+Source: the author's prior Magento augmenter (MIT, same author — a
 private companion repo), originally written by Lucas van Staden /
 Proxiblue and licensed MIT there.
 
@@ -35,8 +35,8 @@ plus the parse-only `parseSingle*`/`find*Files` functions extracted from
 `parsers/events-xml.ts`, `parsers/webapi-xml.ts`, `parsers/routes-xml.ts`)
 and the path resolvers (`resolvers/psr4-map.ts`,
 `resolvers/template-path.ts`) were vendored into this repository. The
-GitNexus-coupled writer (`writer/lbug-writer.ts`), the filesystem-based
-node-id resolver (`resolvers/node-id.ts`), and the XML-to-GitNexus-graph
+legacy-server-coupled writer (`writer/lbug-writer.ts`), the filesystem-based
+node-id resolver (`resolvers/node-id.ts`), and the XML-to-legacy-graph
 mapper bodies (`*-mapper.ts` / `mapAndParse*` functions) were NOT vendored
 — they are re-implemented from scratch against the codegraph SQLite schema
 in this repository's own tasks 002/003/003b.

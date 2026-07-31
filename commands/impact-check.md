@@ -47,7 +47,7 @@ fixed approot convention `templates/registry.template.json` documents.)
     equivalent yet** (v0.2's augmenter does not model table writes) — always
     run step 3e's heuristic regardless of backend.
   - See `docs/query-cookbook.md` for each `query` template's params and the
-    old GitNexus cypher query it replaces.
+    legacy graph query it replaces.
 - **`LEGACY_LLM`** — no index present (or the `pb-codegraph` MCP server
   isn't reachable). Fall back to the original flow below unchanged: grep,
   `magento2-lsp` MCP, and structured LLM reasoning for every step. This is

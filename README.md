@@ -16,10 +16,10 @@ by checking for a `.codegraph/codegraph.db` index — see
 
 **Cutover status:** acceptance-tested against pvcpipesupplies (pps) —
 **AWAITING LUCAS SIGN-OFF.** `docs/acceptance-report-pps-2026-07-31.md` documents a real
-run comparing the new graph backend against the live GitNexus container on 5
+run comparing the new graph backend against the live legacy graph container on 5
 real pps symbols, with a safety-verified read-only harness
 (`scripts/acceptance-diff.sh`). **No project has been cut over.** No
-GitNexus container has been stopped or removed by this release. Cutover
+legacy graph container has been stopped or removed by this release. Cutover
 (`docs/cutover.md`) is a deliberate, per-project, human-approved action —
 this repo ships the tooling and the evidence, not the decision.
 
@@ -71,7 +71,7 @@ Three new pieces, all in this repo, none touching pb-hcf or any project's
 Vendored-code provenance: the pure XML parsers and path resolvers under
 `augmenter/src/parsers/` and `augmenter/src/resolvers/psr4-map.ts` /
 `template-path.ts` are vendored, minimally modified, from Lucas's own prior
-`mage-os-gitnexus` project (originally MIT, relicensed Apache-2.0 with his
+Magento augmenter project (originally MIT, relicensed Apache-2.0 with his
 consent — see `NOTICE`). The mappers, the SQLite writer, and the DB-backed
 node-id resolver are new code, not vendored — see `NOTICE` and the code
 comments at each vendored file's top for the modification-notice trail
@@ -193,7 +193,7 @@ See `docs/cutover.md` for the full runbook. Summary:
 4. Build the project's own index in-container (`pb-codegraph index`), and generate `registry.json` from `templates/registry.template.json`.
 5. Swap the `mcps/.mcp.json` `pb-codegraph` entry from the old HTTP url to a stdio command entry launching `mcp/bin/server.ts`.
 6. Verify with `pb-codegraph health` (exit 0 + `"status": "green"`).
-7. Run `scripts/acceptance-diff.sh` against real symbols and get explicit human sign-off (see `docs/acceptance-report-pps-2026-07-31.md` for the pps template) **before** relying on the graph backend for real decisions or stopping the old GitNexus container.
+7. Run `scripts/acceptance-diff.sh` against real symbols and get explicit human sign-off (see `docs/acceptance-report-pps-2026-07-31.md` for the pps template) **before** relying on the graph backend for real decisions or stopping the legacy graph container.
 
 Rollback at any point is a container `stop` (not remove) plus reverting the
 one `mcps/.mcp.json` entry — no rebuild required.
@@ -246,7 +246,7 @@ SQLite/provenance rules, MCP output shape) live in
 - `docker run --rm -v "$PWD":/w koalaman/shellcheck:stable /w/scripts/<file>.sh` — shell lint for everything under `scripts/`.
 - `docs/vendor-dir-verification.md` — the empirical evidentiary record backing `docs/cutover.md`'s vendor-directory handling claims (real host paths/output from a live run, not a template).
 - `docs/upstream-pr/` is a **deliverable-as-documents** subtree (a draft spec + implementation for contributing back to upstream `colbymchenry/codegraph`, including its own `__tests__/`). It is styled for that upstream repo's own tooling (e.g. vitest-shaped imports), not this one — deliberately excluded from this repo's `tsc` include set and never picked up by this repo's `tests/*.test.ts` glob.
-- `scripts/lib/*.ts` — TypeScript helpers backing `scripts/acceptance-diff.sh` (MCP client calls, GitNexus HTTP client, classification); type-checked as part of the same `tsc` run as the rest of the repo.
+- `scripts/lib/*.ts` — TypeScript helpers backing `scripts/acceptance-diff.sh` (MCP client calls, legacy-backend HTTP client, classification); type-checked as part of the same `tsc` run as the rest of the repo.
 
 ## Dependencies
 
@@ -262,7 +262,7 @@ SQLite/provenance rules, MCP output shape) live in
 - **`wraps` metadata omits `before`/`after`/`around`** — Magento's per-method plugin execution order requires parsing the plugin class's method-name prefixes, not just di.xml. Deferred; see `docs/edge-taxonomy.md`.
 - **`routes.xml` mints a route node but no controller edge** — Magento resolves `frontName → controller` by URL convention, not declaration, so there's nothing in routes.xml to resolve that edge from. Documented honestly in `docs/edge-taxonomy.md` rather than faked.
 - **Native `references` edges are not augmenter-exclusive** — codegraph's own indexer independently emits `references` edges (surfaced by the pps acceptance run, 652 native rows vs 2 augmenter rows in that scratch index); needs a provenance-column-based disambiguation fix in a follow-up task. See `docs/acceptance-report-pps-2026-07-31.md` "Known limitations".
-- **No cutover has happened yet** — every project still runs the old GitNexus container (or the v0.1.0-only LLM flow) until a human explicitly runs the cutover runbook and reviews an acceptance report for that project.
+- **No cutover has happened yet** — every project still runs the legacy graph container (or the v0.1.0-only LLM flow) until a human explicitly runs the cutover runbook and reviews an acceptance report for that project.
 
 ## Roadmap
 

@@ -1,7 +1,7 @@
 # Devil's Advocate Review: v0-2-0-codegraph-engine
 
 Reviewed against actual vendored source at
-`/home/lucas/workspace/proxiblue/mage-os-gitnexus/augmenter/src/` (the code the plan
+the legacy augmenter's source tree (the code the plan
 ports). Several findings contradict the plan's central premise ("vendor parsers +
 resolvers unchanged, replace only the writer"). Evidence cited per finding.
 
@@ -10,7 +10,7 @@ resolvers unchanged, replace only the writer"). Evidence cited per finding.
 ### C1 — "Vendor parsers/resolvers unchanged" is false; the mappers are the port
 The plan (001 desc, 002 context "parsers/mappers plug in unchanged") assumes only
 `writer/lbug-writer.ts` is replaced. The actual source shows the **mappers** are the
-GitNexus-coupled layer and cannot be vendored verbatim:
+legacy-coupled layer and cannot be vendored verbatim:
 - `parsers/di-xml-mapper.ts:23` does `new NodeIdResolver(psr4Map, projectRoot)` and
   emits synthetic ids `Class:path:Name` (`node-id.ts:64`), not codegraph `class:<hash>`.
 - Every mapper hardcodes `import { AugmentEdge } from '../writer/lbug-writer.js'` and the
@@ -131,7 +131,7 @@ choice; 002 requires the chosen sqlite binding to load in the ddev container, no
 
 ### I5 — Acceptance (011) coverage thin for a deploy-safety swap
 3 hand-picked symbols is a smoke, not coverage, and the three diff categories
-(both-found / new-only / gitnexus-only) miss the most dangerous case: **both found the
+(both-found / new-only / legacy-only) miss the most dangerous case: **both found the
 symbol but returned different impacted sets** (partial agreement). Fix: 011 adds a cross-DB
 case (custom plugin on a mageos class, exercising federation) and a negative case (a symbol
 with no magento wiring, to prove no false edges), and classifies per-impacted-node including
@@ -156,4 +156,4 @@ a "different-set/partial" category.
   scheduling for v0.3 so event-impact becomes true graph traversal rather than
   name-keyed query? (Bears on C4.)
 - Q3: Are 3 acceptance symbols enough for Lucas's sign-off, or should the gate require the
-  full GitNexus cypher-cookbook examples re-run side-by-side?
+  full legacy cypher-cookbook examples re-run side-by-side?

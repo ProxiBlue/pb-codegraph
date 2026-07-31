@@ -12,7 +12,7 @@ gains a graph-backend detection step so both modes ship in the same plugin.
 
 - **Vendored augmenter foundation** — pure XML parsers and path resolvers
   (`di.xml`, `events.xml`, `layout.xml`, `routes.xml`, `webapi.xml`) vendored
-  minimally from `mage-os-gitnexus` (Lucas's own prior MIT-licensed work,
+  minimally from the author's prior Magento augmenter (Lucas's own prior MIT-licensed work,
   relicensed Apache-2.0 — see `NOTICE`); mappers, the writer, and the node-id
   resolver are new, DB-backed re-implementations, not vendored. Fixture
   Magento module tree + fixture codegraph db build script
@@ -42,7 +42,7 @@ gains a graph-backend detection step so both modes ship in the same plugin.
   `pb-codegraph health` subcommand for registry-wide status checks.
 - **MCP shim** (`mcp/bin/server.ts` / `mcp/src/*.ts`) — new stdio MCP server,
   served under the existing fleet-compat name `pb-codegraph` (drop-in
-  replacement for the old GitNexus HTTP endpoint at cutover, no downstream
+  replacement for the legacy HTTP endpoint at cutover, no downstream
   agent/playbook rewiring needed). Tools:
   - `list_repos` — per-registry-entry status, node/edge counts, augmenter
     freshness, per-repo error isolation.
@@ -56,8 +56,8 @@ gains a graph-backend detection step so both modes ship in the same plugin.
     relative to the last codegraph reindex.
   - `query` — six named, parameterized templates (`callers_of`,
     `wired_plugins_on`, `observers_of_event`, `routes_to`,
-    `preferences_for`, `dead_symbols`) mapped to their old GitNexus/LBUG
-    cypher equivalents in `docs/query-cookbook.md` — no raw SQL passthrough.
+    `preferences_for`, `dead_symbols`) mapped to their legacy/LBUG
+    graph-query equivalents in `docs/query-cookbook.md` — no raw SQL passthrough.
 - **Schema guard** (`shared/schema-guard.ts`) — single
   `assertSupportedSchema` consumed by both the writer's and the shim's DB
   open paths; refuses with an actionable message (naming the pinned
@@ -66,7 +66,7 @@ gains a graph-backend detection step so both modes ship in the same plugin.
   reading/writing a db it doesn't understand.
 - **Core index build** (`scripts/build-core-indexes.sh`) — builds shared,
   read-only vendor-only codegraph indexes (mageos/hyva/deps) from a
-  `.gitnexusignore`-derived `.gitignore`, scoped so a core index can never
+  `.legacyignore`-derived `.gitignore`, scoped so a core index can never
   leak a source project's own tracked tree.
 - **DDEV cutover tooling** — `pb-codegraph health` CLI subcommand,
   `templates/registry.template.json`, and `docs/cutover.md` (full runbook:
@@ -74,11 +74,11 @@ gains a graph-backend detection step so both modes ship in the same plugin.
   per-project vendor-split, MCP entry swap, rollback via container stop-not-
   remove).
 - **pps acceptance run** (`docs/acceptance-report-pps-2026-07-31.md`,
-  `scripts/acceptance-diff.sh`) — real GitNexus-vs-pb-codegraph comparison
+  `scripts/acceptance-diff.sh`) — real legacy-vs-pb-codegraph comparison
   against 5 pvcpipesupplies symbols, safety-verified (pps working tree
   byte-identical before/after). **Status: data collected, AWAITING LUCAS
   SIGN-OFF** — this release does NOT cut pps (or any project) over and does
-  NOT stop the GitNexus container; that decision remains Lucas's per
+  NOT stop the legacy graph container; that decision remains Lucas's per
   `docs/cutover.md` step 9. One taxonomy gap surfaced by the run (native
   `references` edges are not augmenter-exclusive) is logged as a known
   limitation, not fixed in this release.

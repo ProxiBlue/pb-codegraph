@@ -5,7 +5,7 @@ import { XMLParser } from 'fast-xml-parser';
 // pb-codegraph: stripped from the vendored webapi-xml.ts — only the pure
 // parse functions (parseSingleWebapiXml, findWebapiXmlFiles) are vendored.
 // parseAndMapWebapiXml (the mapper body) and its NodeIdResolver/AugmentEdge/
-// AugmentNode dependencies are GitNexus-coupled and are NOT vendored;
+// AugmentNode dependencies are legacy-server-coupled and are NOT vendored;
 // adapted in 003b.
 
 export interface WebapiRoute {

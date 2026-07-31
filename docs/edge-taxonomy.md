@@ -8,7 +8,7 @@ the actual vendored mapper output — not the originally-assumed shape.
 
 ## Why a remap table exists
 
-The vendored GitNexus mappers (`di-xml-mapper.ts`, `events-xml.ts`,
+The vendored legacy mappers (`di-xml-mapper.ts`, `events-xml.ts`,
 `layout-xml-mapper.ts`, `webapi-xml.ts`, `routes-xml.ts` — none of which are
 vendored verbatim; see task 001 scope boundary) emit an uppercase `type` +
 free-text `reason` pair designed for the old LBUG graph schema, not for
@@ -91,7 +91,7 @@ node, not just native symbols).
 ## Endpoint model (corrected — class/minted-node, never `File:`)
 
 The vendored mappers, as written, emit `File:<relpath>` endpoints (a leftover
-of the old GitNexus schema) which have **no corresponding codegraph node** —
+of the legacy tool's schema) which have **no corresponding codegraph node** —
 codegraph indexes PHP symbols, not files, and `events.xml`/`routes.xml`/
 `.phtml` are not PHP symbols at all. The corrected endpoint model that task
 003 (resolver) and 003b (mapper adaptation) must implement:

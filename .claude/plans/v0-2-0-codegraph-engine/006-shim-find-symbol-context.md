@@ -9,7 +9,7 @@ find_symbol(name|qualified_name, repo?): exact qualified_name lookup first, then
 
 ## Context
 - Federation: repo omitted → query every registry db, merge, tag results with repo (RRF-lite: exact matches first, then per-db FTS rank)
-- Output shapes should read like the old GitNexus responses enough that agents' habits keep working (name, path, signature prominent)
+- Output shapes should read like the legacy tool's responses enough that agents' habits keep working (name, path, signature prominent)
 
 ## Requirements (Test Descriptions)
 - [x] `it finds a class by exact qualified name in a named repo`

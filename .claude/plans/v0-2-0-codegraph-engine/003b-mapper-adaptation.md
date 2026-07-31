@@ -5,7 +5,7 @@
 **Retry count**: 0
 
 ## Description
-Re-implement the 5 mapper bodies (di, layout, events, webapi, routes) — NOT vendored verbatim because they hardcode GitNexus's synthetic id scheme, uppercase edge `type`, File-level endpoints, and the filesystem `NodeIdResolver` (see _devils_advocate.md C1/C2/C3). Each adapted mapper consumes the vendored pure parser (task 001), resolves endpoints via the DB-backed resolver (task 003), and emits the writer's edge shape with `metadata` (task 002). Concretely:
+Re-implement the 5 mapper bodies (di, layout, events, webapi, routes) — NOT vendored verbatim because they hardcode the legacy tool's synthetic id scheme, uppercase edge `type`, File-level endpoints, and the filesystem `NodeIdResolver` (see _devils_advocate.md C1/C2/C3). Each adapted mapper consumes the vendored pure parser (task 001), resolves endpoints via the DB-backed resolver (task 003), and emits the writer's edge shape with `metadata` (task 002). Concretely:
 
 - **di preference**: `mapDiXmlEdges` preferences → edge kind `preference_for`, source = impl class node, target = interface/abstract class node.
 - **di plugin**: → kind `wraps`, source = plugin class node, target = wrapped class node, metadata {sortOrder, area} (both ARE parsed by di-xml.ts:90/92 but dropped by the old mapper — forward them). before/after/around NOT emitted in v0.2.
@@ -16,7 +16,7 @@ Re-implement the 5 mapper bodies (di, layout, events, webapi, routes) — NOT ve
 Area-merge semantics from the original augment.ts are preserved (parser ordering, per-area di/events handling). Every emitted edge carries provenance via the writer.
 
 ## Context
-- Reference (do NOT copy verbatim): di-xml-mapper.ts, layout-xml-mapper.ts, events-xml.ts, webapi-xml.ts, routes-xml.ts under ~/workspace/proxiblue/mage-os-gitnexus/augmenter/src — for parser call patterns and stats shapes only.
+- Reference (do NOT copy verbatim): di-xml-mapper.ts, layout-xml-mapper.ts, events-xml.ts, webapi-xml.ts, routes-xml.ts in the legacy augmenter's source tree — for parser call patterns and stats shapes only.
 - The resolver (003) owns FQCN/File→node-id + minting; the writer (002) owns remap-to-kind + metadata JSON + FTS. This task wires parser → resolver → writer per family.
 - Skipped/unresolved counts must still be surfaced per family (the old stats objects) for the CLI summary (004).
 

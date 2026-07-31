@@ -9,7 +9,7 @@
 //
 // Output shape keeps name/path/signature prominent (see
 // .claude/code-standards.md: "tool outputs stable + agent-readable
-// (name/path/signature prominent)") so agents' old GitNexus habits keep
+// (name/path/signature prominent)") so agents' legacy-tool habits keep
 // working.
 import type Database from 'better-sqlite3';
 import { openReadOnlyDb } from './db.ts';

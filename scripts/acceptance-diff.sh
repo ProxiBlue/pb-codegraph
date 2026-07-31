@@ -2,10 +2,10 @@
 # scripts/acceptance-diff.sh
 #
 # Task 011 acceptance harness: for a Magento/Mage-OS project checkout that
-# still has a live GitNexus container, index+augment a READ-ONLY COPY of its
+# still has a live legacy graph container, index+augment a READ-ONLY COPY of its
 # app/code into a scratch directory with the new pb-codegraph stack, query
 # BOTH backends' `impact` tool for a caller-supplied list of real symbols,
-# and emit a per-impacted-node (both-found / new-stack-only / gitnexus-only
+# and emit a per-impacted-node (both-found / new-stack-only / legacy-only
 # / different-set) classification.
 #
 # HARD FLEET RULE: this script must NEVER write inside the project root it
@@ -26,21 +26,21 @@
 #   scripts/acceptance-diff.sh \
 #     --pps-root <magento-project-checkout> \
 #     --symbols <path-to-symbols.json> \
-#     (--gitnexus-container <docker-container-name> | --gitnexus-base-url <url>) \
-#     [--gitnexus-port <port>] [--gitnexus-repo <name>] \
+#     (--legacy-container <docker-container-name> | --legacy-base-url <url>) \
+#     [--legacy-port <port>] [--legacy-repo <name>] \
 #     [--scratch-dir <dir>] [--out-dir <dir>] [--depth <1-4>] [--keep-scratch]
 #
 # The symbols JSON has the shape documented at the top of
-# scripts/acceptance-symbols-pps.json (a "gitnexus_repo" default + a
+# scripts/acceptance-symbols-pps.json (a "legacy_repo" default + a
 # "symbols" array of {label, category, description, new_stack_symbol,
-# gitnexus_target, gitnexus_file_path}).
+# legacy_target, legacy_file_path}).
 #
 # Exit codes:
 #   0  success — classification produced (NOT a pass/fail verdict on the
 #      migration itself; see docs/acceptance-report-pps-2026-07-31.md
 #      "AWAITING LUCAS SIGN-OFF")
 #   1  usage / configuration error
-#   2  GitNexus backend unreachable (fails loudly — no partial verdict)
+#   2  legacy backend unreachable (fails loudly — no partial verdict)
 #   3  new-stack indexing/augment/query step failed (fails loudly — no
 #      partial verdict)
 #   4  SAFETY TRIP — the project root's git working tree changed during the
@@ -52,10 +52,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 PPS_ROOT=""
 SYMBOLS_FILE=""
-GITNEXUS_CONTAINER=""
-GITNEXUS_BASE_URL=""
-GITNEXUS_PORT="4747"
-GITNEXUS_REPO=""
+LEGACY_CONTAINER=""
+LEGACY_BASE_URL=""
+LEGACY_PORT="4747"
+LEGACY_REPO=""
 SCRATCH_DIR=""
 OUT_DIR=""
 DEPTH="4"
@@ -93,10 +93,10 @@ parse_args() {
     case "$1" in
       --pps-root) PPS_ROOT="${2:?--pps-root requires a value}"; shift 2 ;;
       --symbols) SYMBOLS_FILE="${2:?--symbols requires a value}"; shift 2 ;;
-      --gitnexus-container) GITNEXUS_CONTAINER="${2:?--gitnexus-container requires a value}"; shift 2 ;;
-      --gitnexus-base-url) GITNEXUS_BASE_URL="${2:?--gitnexus-base-url requires a value}"; shift 2 ;;
-      --gitnexus-port) GITNEXUS_PORT="${2:?--gitnexus-port requires a value}"; shift 2 ;;
-      --gitnexus-repo) GITNEXUS_REPO="${2:?--gitnexus-repo requires a value}"; shift 2 ;;
+      --legacy-container) LEGACY_CONTAINER="${2:?--legacy-container requires a value}"; shift 2 ;;
+      --legacy-base-url) LEGACY_BASE_URL="${2:?--legacy-base-url requires a value}"; shift 2 ;;
+      --legacy-port) LEGACY_PORT="${2:?--legacy-port requires a value}"; shift 2 ;;
+      --legacy-repo) LEGACY_REPO="${2:?--legacy-repo requires a value}"; shift 2 ;;
       --scratch-dir) SCRATCH_DIR="${2:?--scratch-dir requires a value}"; OWN_SCRATCH_DIR=0; shift 2 ;;
       --out-dir) OUT_DIR="${2:?--out-dir requires a value}"; shift 2 ;;
       --depth) DEPTH="${2:?--depth requires a value}"; shift 2 ;;
@@ -110,11 +110,11 @@ parse_args() {
   [ -d "$PPS_ROOT" ] || die "--pps-root directory does not exist: $PPS_ROOT"
   [ -n "$SYMBOLS_FILE" ] || die "--symbols is required"
   [ -f "$SYMBOLS_FILE" ] || die "--symbols file does not exist: $SYMBOLS_FILE"
-  if [ -z "$GITNEXUS_CONTAINER" ] && [ -z "$GITNEXUS_BASE_URL" ]; then
-    die "one of --gitnexus-container or --gitnexus-base-url is required"
+  if [ -z "$LEGACY_CONTAINER" ] && [ -z "$LEGACY_BASE_URL" ]; then
+    die "one of --legacy-container or --legacy-base-url is required"
   fi
-  if [ -n "$GITNEXUS_CONTAINER" ] && [ -n "$GITNEXUS_BASE_URL" ]; then
-    die "pass only one of --gitnexus-container or --gitnexus-base-url, not both"
+  if [ -n "$LEGACY_CONTAINER" ] && [ -n "$LEGACY_BASE_URL" ]; then
+    die "pass only one of --legacy-container or --legacy-base-url, not both"
   fi
 }
 
@@ -146,33 +146,33 @@ verify_pps_status_unchanged() {
   log "pps working tree unchanged (git status --porcelain identical before/after) — verified."
 }
 
-# --- step 1: GitNexus reachability -------------------------------------------
+# --- step 1: legacy-backend reachability -------------------------------------------
 
-resolve_gitnexus_base_url() {
-  if [ -n "$GITNEXUS_BASE_URL" ]; then
+resolve_legacy_base_url() {
+  if [ -n "$LEGACY_BASE_URL" ]; then
     return
   fi
   require_cmd docker
   local ip
-  ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$GITNEXUS_CONTAINER" 2>/dev/null | awk '{print $1}')"
+  ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$LEGACY_CONTAINER" 2>/dev/null | awk '{print $1}')"
   if [ -z "$ip" ]; then
-    die "GITNEXUS UNREACHABLE: could not resolve a container IP for '$GITNEXUS_CONTAINER' (is it running? \`docker ps\`)" 2
+    die "LEGACY BACKEND UNREACHABLE: could not resolve a container IP for '$LEGACY_CONTAINER' (is it running? \`docker ps\`)" 2
   fi
-  GITNEXUS_BASE_URL="http://$ip:$GITNEXUS_PORT/api/mcp"
-  log "resolved gitnexus base url: $GITNEXUS_BASE_URL (container=$GITNEXUS_CONTAINER)"
+  LEGACY_BASE_URL="http://$ip:$LEGACY_PORT/api/mcp"
+  log "resolved legacy base url: $LEGACY_BASE_URL (container=$LEGACY_CONTAINER)"
 }
 
-check_gitnexus_reachable() {
+check_legacy_reachable() {
   local probe
-  if ! probe="$(curl -sS -m 10 -o /dev/null -w '%{http_code}' -X POST "$GITNEXUS_BASE_URL" \
+  if ! probe="$(curl -sS -m 10 -o /dev/null -w '%{http_code}' -X POST "$LEGACY_BASE_URL" \
       -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
       -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"acceptance-diff-probe","version":"0.0.0"}}}' 2>&1)"; then
-    die "GITNEXUS UNREACHABLE: connection to $GITNEXUS_BASE_URL failed: $probe" 2
+    die "LEGACY BACKEND UNREACHABLE: connection to $LEGACY_BASE_URL failed: $probe" 2
   fi
   if [ "$probe" != "200" ]; then
-    die "GITNEXUS UNREACHABLE: $GITNEXUS_BASE_URL returned HTTP $probe on initialize" 2
+    die "LEGACY BACKEND UNREACHABLE: $LEGACY_BASE_URL returned HTTP $probe on initialize" 2
   fi
-  log "gitnexus reachable at $GITNEXUS_BASE_URL (initialize -> HTTP 200)"
+  log "legacy backend reachable at $LEGACY_BASE_URL (initialize -> HTTP 200)"
 }
 
 # --- step 2: scratch copy + index + augment ----------------------------------
@@ -209,14 +209,14 @@ main() {
   require_cmd python3
   require_cmd git
 
-  if [ -z "$GITNEXUS_REPO" ]; then
-    GITNEXUS_REPO="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('gitnexus_repo',''))" "$SYMBOLS_FILE")"
+  if [ -z "$LEGACY_REPO" ]; then
+    LEGACY_REPO="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('legacy_repo',''))" "$SYMBOLS_FILE")"
   fi
-  [ -n "$GITNEXUS_REPO" ] || die "--gitnexus-repo not given and symbols file has no top-level \"gitnexus_repo\""
+  [ -n "$LEGACY_REPO" ] || die "--legacy-repo not given and symbols file has no top-level \"legacy_repo\""
 
   snapshot_pps_status
-  resolve_gitnexus_base_url
-  check_gitnexus_reachable
+  resolve_legacy_base_url
+  check_legacy_reachable
 
   if [ -z "$SCRATCH_DIR" ]; then
     SCRATCH_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pb-codegraph-acceptance-XXXXXX")"
@@ -230,20 +230,20 @@ main() {
   local registry_path="$SCRATCH_DIR/registry.json"
 
   build_new_stack_index "$project_dir"
-  write_registry "$registry_path" "$GITNEXUS_REPO" "$project_dir/.codegraph/codegraph.db"
+  write_registry "$registry_path" "$LEGACY_REPO" "$project_dir/.codegraph/codegraph.db"
 
   log "querying the new-stack MCP shim over stdio (mcp/bin/server.ts) for every symbol"
   if ! node --import tsx "$SCRIPT_DIR/lib/new-stack-impact.ts" \
-      --registry "$registry_path" --repo "$GITNEXUS_REPO" \
+      --registry "$registry_path" --repo "$LEGACY_REPO" \
       --symbols "$SYMBOLS_FILE" --out-dir "$OUT_DIR" --depth "$DEPTH"; then
     die "new-stack impact query step failed — see output above" 3
   fi
 
-  log "querying GitNexus over HTTP JSON-RPC for every symbol"
-  if ! node --import tsx "$SCRIPT_DIR/lib/gitnexus-impact.ts" \
-      --base-url "$GITNEXUS_BASE_URL" --repo "$GITNEXUS_REPO" \
+  log "querying the legacy MCP server over HTTP JSON-RPC for every symbol"
+  if ! node --import tsx "$SCRIPT_DIR/lib/legacy-impact.ts" \
+      --base-url "$LEGACY_BASE_URL" --repo "$LEGACY_REPO" \
       --symbols "$SYMBOLS_FILE" --out-dir "$OUT_DIR" --max-depth "$DEPTH"; then
-    die "GITNEXUS UNREACHABLE or errored mid-run — see output above (no partial verdict emitted)" 2
+    die "LEGACY BACKEND UNREACHABLE or errored mid-run — see output above (no partial verdict emitted)" 2
   fi
 
   log "classifying per-impacted-node divergence"

@@ -1,5 +1,5 @@
 // Tests for `pb-codegraph health` (task 010) — the CLI replacement for the
-// old gitnexus http :4747 probe. See docs/cutover.md "Health probe" section
+// legacy http :4747 probe. See docs/cutover.md "Health probe" section
 // for the wire-usage contract this backs.
 import test from 'node:test';
 import assert from 'node:assert/strict';

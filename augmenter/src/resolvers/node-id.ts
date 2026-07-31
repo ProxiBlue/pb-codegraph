@@ -1,4 +1,4 @@
-// pb-codegraph: new file (not vendored). mage-os-gitnexus's
+// pb-codegraph: new file (not vendored). The legacy augmenter's
 // resolvers/node-id.ts is filesystem/synthetic-id based (`NodeIdResolver`,
 // `fs.existsSync`, synthetic `Class:<path>:<Name>` ids) and never queries a
 // DB — see _devils_advocate.md C1. This is a from-scratch, DB-backed

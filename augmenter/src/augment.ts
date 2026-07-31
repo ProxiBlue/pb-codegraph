@@ -1,5 +1,5 @@
 // pb-codegraph: new file (not vendored). Orchestration analogue of
-// mage-os-gitnexus's augmenter/src/augment.ts — same phase ordering
+// the legacy augmenter's augment.ts — same phase ordering
 // (di.xml -> layout xml -> events.xml -> webapi.xml -> routes.xml) and the
 // same best-effort per-phase error handling (a single mapper failure logs a
 // warning and contributes zero edges/nodes rather than aborting the whole

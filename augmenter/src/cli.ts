@@ -42,7 +42,7 @@ export function usage(): string {
     '  augment  Parse Magento XML wiring and inject edges into an already-indexed codegraph db.',
     '  index    Rebuild the codegraph index (init if never indexed) then augment it — the answer',
     '           to a codegraph reindex cascade-wiping previously-injected magento edges.',
-    '  health   Report registry-wide health as JSON (wire-probe replacement for the old gitnexus',
+    '  health   Report registry-wide health as JSON (wire-probe replacement for the legacy',
     '           curl :4747 check). Non-green when any repo is unreadable/unsupported-schema or its',
     '           augmenter marker is stale. --registry overrides PB_CODEGRAPH_REGISTRY.',
   ].join('\n');

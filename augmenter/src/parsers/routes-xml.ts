@@ -5,7 +5,7 @@ import { XMLParser } from 'fast-xml-parser';
 // pb-codegraph: stripped from the vendored routes-xml.ts — only the pure
 // parse functions (parseSingleRoutesXml, findRoutesXmlFiles) are vendored.
 // parseAndMapRoutesXml (the mapper body) and its AugmentEdge/AugmentNode
-// dependencies are GitNexus-coupled and are NOT vendored; adapted in 003b.
+// dependencies are legacy-server-coupled and are NOT vendored; adapted in 003b.
 
 export interface FrontendRoute {
   routeId: string;

@@ -10,8 +10,8 @@ const noticePath = path.join(path.resolve(__dirname, '..'), 'NOTICE');
 test('it records vendored-code origin in NOTICE', () => {
   const notice = fs.readFileSync(noticePath, 'utf-8');
 
-  // Identifies the vendored source repo/path
-  assert.match(notice, /mage-os-gitnexus/, 'must name the source repo the augmenter was vendored from');
+  // Identifies the vendored-code origin (author's prior augmenter, no repo name)
+  assert.match(notice, /prior Magento augmenter/, 'must identify the origin of the vendored augmenter code');
   assert.match(notice, /augmenter/, 'must name the augmenter subdirectory');
 
   // States the vendored code is Lucas's own MIT-licensed code being relicensed

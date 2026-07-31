@@ -4,11 +4,11 @@
 only accepts one of the six named templates below, each a fixed prepared
 statement over `nodes`/`edges` — the only caller-controlled input is bound
 params, validated per template (`mcp/src/query.ts`). This doc maps each
-template to the old GitNexus/LBUG cypher pattern it replaces, so anyone
+template to the legacy graph query it replaces, so anyone
 migrating a playbook query from the pre-pb-codegraph tool has a direct
 translation.
 
-**Provenance note on the cypher shown below:** the old GitNexus mappers
+**Provenance note on the cypher shown below:** the legacy mappers
 (`lbug-writer.ts` and friends) are explicitly NOT vendored into this repo
 (see task 001 scope boundary / `docs/edge-taxonomy.md`), so these are
 reconstructed representative examples of the query shapes the fleet's
@@ -29,7 +29,7 @@ symbol. Deliberately excludes the augmenter's own `references` rows
 `docs/edge-taxonomy.md` — so `provenance IS NULL` is what keeps "who calls
 this" from being polluted by "what route points at this").
 
-**Old GitNexus equivalent:**
+**Legacy graph query:**
 ```cypher
 MATCH (caller)-[r:CALLS|REFERENCES|IMPORTS]->(target {id: $id})
 RETURN caller, r
@@ -44,7 +44,7 @@ RETURN caller, r
 `docs/edge-taxonomy.md`'s corrected endpoint model), with `sortOrder`/`area`
 metadata surfaced.
 
-**Old GitNexus equivalent:**
+**Legacy graph query:**
 ```cypher
 MATCH (target {id: $id})-[r:WRAPPED_BY]->(plugin)
 RETURN plugin, r.sortOrder, r.area
@@ -68,7 +68,7 @@ is the only way v0.2 answers "who observes this event" — a
 dispatch-site recognizer that would let `impact`/`callers_of` traverse
 FROM a dispatching method TO its observers is deferred to a v0.3 stretch.
 
-**Old GitNexus equivalent:**
+**Legacy graph query:**
 ```cypher
 MATCH (e:Event {name: $eventName})-[r:OBSERVED_BY]->(observer)
 RETURN observer, r
@@ -93,7 +93,7 @@ returns what the augmenter actually wrote an edge for (the declaring
 module/class), never a resolved "the" controller that doesn't exist as an
 edge in v0.2.
 
-**Old GitNexus equivalent:**
+**Legacy graph query:**
 ```cypher
 MATCH (svc)-[r:HANDLES_ROUTE]->(route:Route {path: $routePath})
 RETURN svc, r
@@ -112,7 +112,7 @@ for). Each row is tagged `direction: 'outgoing' | 'incoming'` so callers can
 tell which case applied without needing to already know whether `symbol`
 was an interface or a class.
 
-**Old GitNexus equivalent:**
+**Legacy graph query:**
 ```cypher
 MATCH (i)-[r:PREFERRED_BY]-(c)
 WHERE i.id = $id OR c.id = $id
@@ -131,7 +131,7 @@ indexed tree are a known false-positive class — cross-check against
 `wired_plugins_on`/`routes_to`/`observers_of_event` before deleting
 anything this template surfaces).
 
-**Old GitNexus equivalent:** none — this is a new template, not a port of
+**Legacy graph query:** none — this is a new template, not a port of
 an existing playbook query. The nearest LBUG-era approximation was a manual
 `MATCH (n) WHERE NOT ()-->(n) RETURN n` run ad hoc, never a named/reusable
 query.

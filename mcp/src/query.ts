@@ -2,7 +2,7 @@
 // NOT raw SQL passthrough (see .claude/code-standards.md). Every template
 // below is a fixed prepared statement; the only caller-controlled input is
 // bound query params, never SQL text. See docs/query-cookbook.md for the
-// mapping from each template to the old GitNexus cypher pattern it
+// mapping from each template to the legacy graph query it
 // replaces.
 import type Database from 'better-sqlite3';
 import { openReadOnlyDb } from './db.ts';
@@ -145,8 +145,8 @@ function resolveOrThrow(db: Database.Database, symbol: string, template: string)
 
 /**
  * callers_of: who calls/references/imports/instantiates this symbol —
- * incoming NATIVE edges only (see NATIVE_CALL_LIKE_KINDS). Maps to the old
- * GitNexus `MATCH (caller)-[:CALLS|REFERENCES]->(target {id: $id})` cypher
+ * incoming NATIVE edges only (see NATIVE_CALL_LIKE_KINDS). Maps to the legacy
+ * `MATCH (caller)-[:CALLS|REFERENCES]->(target {id: $id})` graph-query
  * pattern (see docs/query-cookbook.md).
  */
 function callersOf(db: Database.Database, params: Record<string, unknown>): EdgeJoinRow[] {
@@ -168,8 +168,8 @@ function callersOf(db: Database.Database, params: Record<string, unknown>): Edge
 
 /**
  * wired_plugins_on: the plugin class(es) di.xml wires onto this target
- * class/method. Maps to the old GitNexus
- * `MATCH (target)-[:WRAPPED_BY]->(plugin)` cypher pattern.
+ * class/method. Maps to the legacy
+ * `MATCH (target)-[:WRAPPED_BY]->(plugin)` graph-query pattern.
  */
 function wiredPluginsOn(db: Database.Database, params: Record<string, unknown>): EdgeJoinRow[] {
   const symbol = requireStringParam(params, 'symbol', 'wired_plugins_on');
@@ -191,8 +191,8 @@ function wiredPluginsOn(db: Database.Database, params: Record<string, unknown>):
  * observers_of_event: observer class(es) events.xml wires onto a named
  * event. Params: { event: "<event name>" } — resolves the minted event
  * node (id `magento:event:<name>` or a node with kind='event' matching
- * name/id exactly). Maps to the old GitNexus
- * `MATCH (e:Event {name: $name})-[:OBSERVED_BY]->(observer)` cypher
+ * name/id exactly). Maps to the legacy
+ * `MATCH (e:Event {name: $name})-[:OBSERVED_BY]->(observer)` graph-query
  * pattern. See task 007 C4 scope note: this is the ONLY supported way to
  * reach observers by event name — there is no PHP dispatch-site -> event
  * edge in v0.2.
@@ -226,8 +226,8 @@ function observersOfEvent(db: Database.Database, params: Record<string, unknown>
  * Params: { route: "<route path or id>" }. Endpoint direction per
  * docs/edge-taxonomy.md: class node is the source, route node is the
  * target — so this resolves the route node then walks INCOMING `references`
- * edges. Maps to the old GitNexus
- * `MATCH (svc)-[:HANDLES_ROUTE]->(r:Route {path: $path})` cypher pattern.
+ * edges. Maps to the legacy
+ * `MATCH (svc)-[:HANDLES_ROUTE]->(r:Route {path: $path})` graph-query pattern.
  */
 function routesTo(db: Database.Database, params: Record<string, unknown>): EdgeJoinRow[] {
   const route = requireStringParam(params, 'route', 'routes_to');
@@ -255,8 +255,8 @@ function routesTo(db: Database.Database, params: Record<string, unknown>): EdgeJ
  * directions from the given interface or class — the interface's
  * preference_for edge (outgoing, to the concrete class it's redirected to)
  * and/or the class's preference_for edge (incoming, from the interface(s)
- * it substitutes for). Maps to the old GitNexus
- * `MATCH (i)-[:PREFERRED_BY]-(c)` (undirected) cypher pattern.
+ * it substitutes for). Maps to the legacy
+ * `MATCH (i)-[:PREFERRED_BY]-(c)` (undirected) graph-query pattern.
  */
 function preferencesFor(db: Database.Database, params: Record<string, unknown>): EdgeJoinRow[] {
   const symbol = requireStringParam(params, 'symbol', 'preferences_for');
@@ -285,7 +285,7 @@ function preferencesFor(db: Database.Database, params: Record<string, unknown>):
  * dead_symbols: class/interface/method nodes with NO incoming edge of any
  * kind (native or magento) — candidates for dead code. Heuristic, not a
  * certainty: a public API entry point with no local caller looks identical.
- * No direct GitNexus cypher equivalent existed for this template (new in
+ * No direct legacy graph-query equivalent existed for this template (new in
  * pb-codegraph) — see docs/query-cookbook.md.
  */
 function deadSymbols(db: Database.Database, _params: Record<string, unknown>): EdgeJoinRow[] {

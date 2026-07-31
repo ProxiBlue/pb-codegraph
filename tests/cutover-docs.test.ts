@@ -19,25 +19,25 @@ function readDoc(): string {
   return fs.readFileSync(docPath, 'utf-8');
 }
 
-test('it documents the full pps cutover sequence including rollback (gitnexus containers stopped not removed)', () => {
+test('it documents the full pps cutover sequence including rollback (legacy graph containers stopped not removed)', () => {
   const doc = readDoc();
 
   assert.match(doc, /pvcpipesupplies|\bpps\b/i, 'must name pps as the cutover target');
 
   // The sequence must be a concrete, ordered set of steps, not prose alone.
-  for (const marker of [/docker stop ddev-.*-gitnexus/, /registry\.json/, /mcps\/\.mcp\.json/, /pb-codegraph health/]) {
+  for (const marker of [/docker stop <legacy-graph-container>/, /registry\.json/, /mcps\/\.mcp\.json/, /pb-codegraph health/]) {
     assert.match(doc, marker, `cutover sequence missing expected step matching ${marker}`);
   }
 
   // Rollback: containers stopped, explicitly NOT removed/deleted.
   assert.match(doc, /## Rollback/i, 'must have a distinct Rollback section');
-  assert.match(doc, /docker stop ddev-.*-gitnexus/, 'rollback must stop the gitnexus container');
-  assert.match(doc, /docker start ddev-.*-gitnexus/, 'rollback must be able to restart the still-present gitnexus container');
-  assert.doesNotMatch(doc, /docker rm\b.*gitnexus/, 'rollback/cutover must never remove the gitnexus container');
+  assert.match(doc, /docker stop <legacy-graph-container>/, 'rollback must stop the legacy graph container');
+  assert.match(doc, /docker start <legacy-graph-container>/, 'rollback must be able to restart the still-present legacy graph container');
+  assert.doesNotMatch(doc, /docker rm\b.*<legacy-graph-container>/, 'rollback/cutover must never remove the legacy graph container');
   assert.match(
     doc,
     /not removed|never remov|stopped[, ]+not removed/i,
-    'must explicitly state gitnexus containers are stopped, not removed',
+    'must explicitly state legacy graph containers are stopped, not removed',
   );
 });
 

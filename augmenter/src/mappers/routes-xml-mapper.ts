@@ -1,5 +1,5 @@
-// pb-codegraph: new file (not vendored). Adapts mage-os-gitnexus's
-// parsers/routes-xml.ts `parseAndMapRoutesXml` (GitNexus-coupled, not
+// pb-codegraph: new file (not vendored). Adapts the legacy augmenter's
+// parsers/routes-xml.ts `parseAndMapRoutesXml` (legacy-server-coupled, not
 // vendored — see task 001 scope + _devils_advocate.md C1/C3). The vendored
 // mapper links `File:<routes.xml>` -> a Route node, which both fabricates a
 // meaningless "routes.xml file declares itself" edge and never resolves an

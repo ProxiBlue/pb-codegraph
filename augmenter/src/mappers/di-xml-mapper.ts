@@ -1,4 +1,4 @@
-// pb-codegraph: new file (not vendored). Adapts mage-os-gitnexus's
+// pb-codegraph: new file (not vendored). Adapts the legacy augmenter's
 // parsers/di-xml-mapper.ts (see _devils_advocate.md C1/C2/C3) — that mapper
 // instantiates the filesystem `NodeIdResolver`, emits uppercase
 // IMPLEMENTS/WRAPS `type` values, and drops the `sortOrder`/`area` a plugin

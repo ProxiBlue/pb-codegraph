@@ -31,7 +31,7 @@ The original `reason` is preserved as `metadata.reason`. `confidence` is dropped
 
 ## Context
 - Schema (spike-verified): nodes(id TEXT pk, kind, name, qualified_name, file_path, language, start/end lines/cols, signature, visibility...), edges(source,target,kind,metadata JSON,line,col,provenance), FTS5 nodes_fts (content-linked)
-- The writer defines the AugmentEdge/AugmentNode input types (gaining `metadata`); it does NOT mirror lbug-writer.ts's CSV/Cypher machinery — that was GitNexus-specific. Task 003b's adapted mappers produce the input; task 003's resolver produces the node ids.
+- The writer defines the AugmentEdge/AugmentNode input types (gaining `metadata`); it does NOT mirror lbug-writer.ts's CSV/Cypher machinery — that was legacy-tool-specific. Task 003b's adapted mappers produce the input; task 003's resolver produces the node ids.
 - better-sqlite3 or node:sqlite — pick, justify in code comment (must load in-container, see Description)
 
 ## Requirements (Test Descriptions)

@@ -150,7 +150,7 @@ export function createServer(): McpServer {
       description:
         `Runs one of the named templates (${QUERY_TEMPLATE_NAMES.join(', ')}) against a repo or every registered ` +
         'repo — never raw SQL. See docs/query-cookbook.md for each template\'s params and its mapping from the old ' +
-        'GitNexus cypher query it replaces.',
+        'legacy graph query it replaces.',
       inputSchema: {
         template: z.enum(QUERY_TEMPLATE_NAMES).describe('Named query template to run'),
         params: z.record(z.string(), z.unknown()).describe('Template-specific params (see docs/query-cookbook.md)'),

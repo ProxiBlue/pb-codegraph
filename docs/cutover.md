@@ -1,7 +1,7 @@
-# ddev cutover: GitNexus -> pb-codegraph
+# ddev cutover: legacy code-graph tool -> pb-codegraph
 
-Replaces a project's per-project GitNexus container (`docker-compose.gitnexus.yaml`,
-served at `http://gitnexus:4747`) with the pb-codegraph MCP shim (stdio, spawned
+Replaces a project's per-project legacy graph container (defined in its own
+`.ddev` compose file, served over HTTP on `:4747`) with the pb-codegraph MCP shim (stdio, spawned
 by in-container claude) plus a small set of shared, read-only "core" indexes
 mounted into every project's web container. Acceptance-tested end to end
 against pps (`pvcpipesupplies`) in task 011; this doc is the runbook task 011
@@ -172,11 +172,11 @@ Run in this order once sections 0-4 above are understood:
    write below. If not, stop and list the files you were about to write
    (`.ddev/docker-compose.pb-codegraph.yaml`, `registry.json`,
    `mcps/.mcp.json`).
-2. **Stop (not remove) the running gitnexus container** — it stays defined
-   in `docker-compose.gitnexus.yaml` and its volumes are untouched, so
+2. **Stop (not remove) the running legacy graph container** — it stays
+   defined in its own compose file and its volumes are untouched, so
    rollback is instant:
    ```bash
-   docker stop ddev-pvcpipesupplies-gitnexus
+   docker stop <legacy-graph-container>   # its name is visible in `docker ps` (ddev-pvcpipesupplies-*)
    ```
 3. **Add the read-only core-index mount** (section 4) and `ddev restart`.
 4. **Build the core indexes once, centrally** (host, shared across every
@@ -192,7 +192,7 @@ Run in this order once sections 0-4 above are understood:
 6. **Write `registry.json`** from `templates/registry.template.json`
    (section 2), with `pvcpipesupplies` as the project key.
 7. **Swap the `mcps/.mcp.json` `pb-codegraph` entry** from the old
-   `http://gitnexus:4747/api/mcp` url entry to a stdio command entry that
+   legacy `:4747/api/mcp` http url entry to a stdio command entry that
    launches the shim (`mcp/bin/server.ts`) with `PB_CODEGRAPH_REGISTRY`
    pointed at the container path of the `registry.json` written in step 6.
 8. **Verify**:
@@ -201,34 +201,34 @@ Run in this order once sections 0-4 above are understood:
    ```
    Exit code 0 and `"status": "green"` in the JSON output confirms every
    registered repo opened cleanly with a fresh augmenter marker.
-9. Hand off to task 011 for full GitNexus-vs-pb-codegraph acceptance
+9. Hand off to task 011 for the full legacy-vs-pb-codegraph acceptance
    comparison before removing anything.
 
 ## Rollback
 
-Because step 2 above STOPPED the gitnexus container rather than removing
-it, rollback at any point is fast and does not require rebuilding the
-GitNexus image:
+Because step 2 above STOPPED the legacy graph container rather than
+removing it, rollback at any point is fast and does not require rebuilding
+the legacy image:
 
 ```bash
 # Revert the mcp entry to the old http url (see git history of mcps/.mcp.json)
 git -C ~/claude-skills-central/mcps checkout -- .mcp.json   # or hand-restore the http entry
 
-# Bring the still-present gitnexus container back
-docker start ddev-pvcpipesupplies-gitnexus
+# Bring the still-present legacy graph container back
+docker start <legacy-graph-container>
 ```
 
-Gitnexus containers are stopped, not removed, at every step of this
-runbook — `docker rm`/`docker compose down`/deleting
-`docker-compose.gitnexus.yaml` are explicitly OUT OF SCOPE for the cutover
-itself. Actual teardown/removal of the GitNexus container and image is a
-separate, later, deliberate step taken only after task 011's acceptance
+Legacy graph containers are stopped, not removed, at every step of this
+runbook — `docker rm`/`docker compose down`/deleting the legacy compose
+file are explicitly OUT OF SCOPE for the cutover
+itself. Actual teardown/removal of the legacy graph container and image is
+a separate, later, deliberate step taken only after task 011's acceptance
 comparison confirms parity — never bundled into the cutover.
 
 ## 6. Health probe
 
 `pb-codegraph health [--registry <path>]` (task 010, `augmenter/src/cli.ts`)
-is the CLI replacement for the old GitNexus `curl :4747` liveness check. It
+is the CLI replacement for the legacy tool's `curl :4747` liveness check. It
 prints a single JSON object to stdout —
 
 ```json
@@ -247,7 +247,7 @@ makes the WHOLE health report non-green, not just that repo.
 ### Follow-up (cross-plugin, NOT done in this task/repo): pb-hcf probe update
 
 pb-hcf's pre-flight-check/wire currently probes liveness with `curl
-:4747` against the old GitNexus http endpoint. That probe needs to be
+:4747` against the legacy http endpoint. That probe needs to be
 updated to shell out to `pb-codegraph health --registry <path>` and check
 its exit code instead. **This is an explicit follow-up for the pb-hcf
 project** — this plan does not edit pb-hcf, and no file under

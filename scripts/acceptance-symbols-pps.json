@@ -1,46 +1,46 @@
 {
-  "_comment": "pps-specific acceptance fixture (task 011). NOT read by scripts/acceptance-diff.sh by default — pass its path via --symbols so the harness script itself stays project-agnostic (code-standards.md: 'nothing pps-specific' in shipped script logic). Each entry names ONE real Uptactics symbol (read from app/code/Uptactics/*/etc/{di,events}.xml on 2026-07-31, read-only). new_stack_symbol uses the exact codegraph qualified_name form (Ns\\Sub::ClassName) to avoid ambiguous bare-name collisions (see docs/acceptance-report-pps-2026-07-31.md 'Symbol selection' section for the collision counts that made this necessary). gitnexus_target/gitnexus_file_path mirror the same disambiguation for the GitNexus impact tool's target/file_path params.",
-  "gitnexus_repo": "m2_pvcpipesupplies",
+  "_comment": "pps-specific acceptance fixture (task 011). NOT read by scripts/acceptance-diff.sh by default — pass its path via --symbols so the harness script itself stays project-agnostic (code-standards.md: 'nothing pps-specific' in shipped script logic). Each entry names ONE real Uptactics symbol (read from app/code/Uptactics/*/etc/{di,events}.xml on 2026-07-31, read-only). new_stack_symbol uses the exact codegraph qualified_name form (Ns\\Sub::ClassName) to avoid ambiguous bare-name collisions (see docs/acceptance-report-pps-2026-07-31.md 'Symbol selection' section for the collision counts that made this necessary). legacy_target/legacy_file_path mirror the same disambiguation for the legacy impact tool's target/file_path params.",
+  "legacy_repo": "m2_pvcpipesupplies",
   "symbols": [
     {
       "label": "plugin-wrapped-method",
       "category": "plugin",
       "description": "Uptactics_PpsTheme plugin (aroundGetBreadcrumbPath) wrapping Magento\\Catalog\\Helper\\Data — app/code/Uptactics/PpsTheme/etc/di.xml sortOrder=1.",
       "new_stack_symbol": "Uptactics\\PpsTheme\\Plugin::BreadcrumbsPlugin",
-      "gitnexus_target": "BreadcrumbsPlugin",
-      "gitnexus_file_path": "app/code/Uptactics/PpsTheme/Plugin/BreadcrumbsPlugin.php"
+      "legacy_target": "BreadcrumbsPlugin",
+      "legacy_file_path": "app/code/Uptactics/PpsTheme/Plugin/BreadcrumbsPlugin.php"
     },
     {
       "label": "event-observer",
       "category": "observer",
       "description": "Uptactics_ShipperHqCarrier observer on checkout_onepage_controller_success_action (app/code/Uptactics/ShipperHqCarrier/etc/frontend/events.xml). Same event also carries a second, unrelated observer (Uptactics_TaxCompanyValue's SetCompanyName) — a real multi-observer event.",
       "new_stack_symbol": "Uptactics\\ShipperHqCarrier\\Observer::FetchShippingRates",
-      "gitnexus_target": "FetchShippingRates",
-      "gitnexus_file_path": "app/code/Uptactics/ShipperHqCarrier/Observer/FetchShippingRates.php"
+      "legacy_target": "FetchShippingRates",
+      "legacy_file_path": "app/code/Uptactics/ShipperHqCarrier/Observer/FetchShippingRates.php"
     },
     {
       "label": "preference-redirect",
       "category": "preference",
       "description": "Uptactics_JournalReport di.xml preference redirecting Magento\\Reports\\Model\\ResourceModel\\Product\\Sold\\Collection to the project's own Collection (app/code/Uptactics/JournalReport/etc/di.xml).",
       "new_stack_symbol": "Uptactics\\JournalReport\\Model\\ResourceModel\\Product\\Sold::Collection",
-      "gitnexus_target": "Collection",
-      "gitnexus_file_path": "app/code/Uptactics/JournalReport/Model/ResourceModel/Product/Sold/Collection.php"
+      "legacy_target": "Collection",
+      "legacy_file_path": "app/code/Uptactics/JournalReport/Model/ResourceModel/Product/Sold/Collection.php"
     },
     {
       "label": "cross-db-mage-os-extends",
       "category": "cross-db",
       "description": "Uptactics_JournalReport grid renderer extending mage-os core Magento\\Backend\\Block\\Widget\\Grid\\Column\\Renderer\\AbstractRenderer directly in PHP (no XML wiring involved) — exercises the native (non-augmenter) cross-DB boundary: core is not indexed in the scratch project DB.",
       "new_stack_symbol": "Uptactics\\JournalReport\\Block\\Widget\\Grid\\Column\\Renderer::Liftgate",
-      "gitnexus_target": "Liftgate",
-      "gitnexus_file_path": "app/code/Uptactics/JournalReport/Block/Widget/Grid/Column/Renderer/Liftgate.php"
+      "legacy_target": "Liftgate",
+      "legacy_file_path": "app/code/Uptactics/JournalReport/Block/Widget/Grid/Column/Renderer/Liftgate.php"
     },
     {
       "label": "negative-control-no-wiring",
       "category": "negative",
       "description": "Uptactics_CustomOptionQtyLimit config helper — never named as a di.xml preference/plugin target, an events.xml observer, a layout block/template, or a webapi/routes target anywhere under app/code/Uptactics. Expect zero magento-kind (wraps/preference_for/observes/renders) edges on both backends.",
       "new_stack_symbol": "Uptactics\\CustomOptionQtyLimit\\Helper::Data",
-      "gitnexus_target": "Data",
-      "gitnexus_file_path": "app/code/Uptactics/CustomOptionQtyLimit/Helper/Data.php"
+      "legacy_target": "Data",
+      "legacy_file_path": "app/code/Uptactics/CustomOptionQtyLimit/Helper/Data.php"
     }
   ]
 }

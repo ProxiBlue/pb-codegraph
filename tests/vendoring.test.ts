@@ -64,11 +64,11 @@ test('it vendors the pure xml parsers and path resolvers verbatim, does NOT vend
     'resolvers/node-id.ts must query the codegraph nodes table (DB-backed, per task 003)',
   );
 
-  // Excluded (GitNexus-coupled) files must NOT be vendored
+  // Excluded (legacy-server-coupled) files must NOT be vendored
   assert.equal(
     fs.existsSync(path.join(srcRoot, 'writer', 'lbug-writer.ts')),
     false,
-    'lbug-writer.ts is GitNexus-specific (ladybugdb CSV/Cypher) — must be re-implemented against ' +
+    'lbug-writer.ts is legacy-tool-specific (ladybugdb CSV/Cypher) — must be re-implemented against ' +
       'codegraph SQLite in task 002 (writer/sqlite-writer.ts), not vendored verbatim',
   );
   assert.equal(

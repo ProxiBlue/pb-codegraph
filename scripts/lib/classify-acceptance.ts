@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --import tsx
 // pb-codegraph: new file (not vendored). Acceptance-harness helper (task
 // 011) — reads the raw per-symbol JSON already written by
-// scripts/lib/new-stack-impact.ts and scripts/lib/gitnexus-impact.ts and
+// scripts/lib/new-stack-impact.ts and scripts/lib/legacy-impact.ts and
 // produces a PER-IMPACTED-NODE classification for each symbol:
 //
 //   both-found     same file_path reached at the same mapped depth on both
@@ -11,19 +11,19 @@
 //                  the devils-advocate "most dangerous" case: both tools
 //                  agree the file is impacted but disagree on how close,
 //                  which could mislead depth-based risk triage.
-//   new-stack-only file_path reached by pb-codegraph but not by GitNexus.
-//   gitnexus-only  file_path reached by GitNexus but not by pb-codegraph.
+//   new-stack-only file_path reached by pb-codegraph but not by the legacy tool.
+//   legacy-only  file_path reached by the legacy tool but not by pb-codegraph.
 //
 // Methodology note (see docs/acceptance-report-pps-2026-07-31.md
 // "Comparison methodology"): the two backends report impacted nodes at
 // different granularities (pb-codegraph: method/field/class/minted-node
-// ids; GitNexus: File:/Class:<file>:<name> ids). This classifier compares
+// ids; legacy tool: File:/Class:<file>:<name> ids). This classifier compares
 // at FILE_PATH granularity (deduped, minimum depth per direction) — the
 // coarsest granularity both backends share — rather than pretending a
 // finer-grained match is meaningful across two different node models.
 // Direction mapping: pb-codegraph "dependencies" (outgoing) <->
-// GitNexus "downstream" (what this depends on); pb-codegraph "dependents"
-// (incoming) <-> GitNexus "upstream" (what depends on this).
+// the legacy tool's "downstream" (what this depends on); pb-codegraph "dependents"
+// (incoming) <-> the legacy tool's "upstream" (what depends on this).
 //
 // Usage:
 //   node --import tsx scripts/lib/classify-acceptance.ts \
@@ -57,12 +57,12 @@ interface SymbolEntry {
   category: string;
   description: string;
   new_stack_symbol: string;
-  gitnexus_target: string;
-  gitnexus_file_path: string;
+  legacy_target: string;
+  legacy_file_path: string;
 }
 
 interface SymbolsFile {
-  gitnexus_repo: string;
+  legacy_repo: string;
   symbols: SymbolEntry[];
 }
 
@@ -75,13 +75,13 @@ interface FileHit {
   edgeKinds: string[];
 }
 
-type Classification = 'both-found' | 'different-set' | 'new-stack-only' | 'gitnexus-only';
+type Classification = 'both-found' | 'different-set' | 'new-stack-only' | 'legacy-only';
 
 interface NodeClassification {
   file_path: string;
   classification: Classification;
   new_stack?: { direction: MappedDirection; depth: number; edge_kinds: string[] };
-  gitnexus?: { direction: MappedDirection; depth: number; relation_types: string[] };
+  legacy?: { direction: MappedDirection; depth: number; relation_types: string[] };
 }
 
 interface SymbolClassification {
@@ -89,9 +89,9 @@ interface SymbolClassification {
   category: string;
   description: string;
   new_stack_found: boolean;
-  gitnexus_found: boolean;
+  legacy_found: boolean;
   new_stack_root_node?: { qualified_name: string; kind: string; augmenter_status: string };
-  gitnexus_root_node?: { id: string; name: string };
+  legacy_root_node?: { id: string; name: string };
   magento_kind_edges_new_stack: Array<{ file_path: string; kind: string; depth: number }>;
   nodes: NodeClassification[];
   counts: Record<Classification, number>;
@@ -138,12 +138,12 @@ function collectNewStackHits(newStackResult: unknown): { hits: FileHit[]; magent
 
       // Real (non-minted) file-backed nodes only participate in the
       // cross-backend file_path comparison — minted nodes (event/route/
-      // template/external) have no GitNexus counterpart by construction.
+      // template/external) have no legacy-tool counterpart by construction.
       if (!row.node.file_path) continue;
 
       // `contains` (structural class->field/method/constant containment)
       // and same-file self-hits are excluded from the file-path comparison:
-      // GitNexus's impact tool never reports pure structural containment or
+      // the legacy impact tool never reports pure structural containment or
       // the queried symbol's own file back to itself as an "impacted" node
       // (it only walks CALLS/IMPORTS/EXTENDS/IMPLEMENTS/HAS_METHOD/...), so
       // including pb-codegraph's `contains` rows here would manufacture
@@ -169,14 +169,14 @@ function collectNewStackHits(newStackResult: unknown): { hits: FileHit[]; magent
   };
 }
 
-function collectGitnexusHits(
+function collectLegacyHits(
   upstream: unknown,
   downstream: unknown,
 ): { hits: FileHit[]; found: boolean; rootNode?: { id: string; name: string } } {
   const up = upstream as { target?: { id: string; name: string }; byDepth?: Record<string, Array<{ filePath: string; depth: number; relationType: string }>> };
   const down = downstream as { target?: { id: string; name: string }; byDepth?: Record<string, Array<{ filePath: string; depth: number; relationType: string }>> };
 
-  // GitNexus returns a `target` object (with `id` unset-looking defaults)
+  // The legacy server returns a `target` object (with `id` unset-looking defaults)
   // even for an unresolved symbol in some server versions, so "found" is
   // judged by whether a non-empty filePath is present on the target.
   const found = Boolean(up.target?.id || down.target?.id);
@@ -195,9 +195,9 @@ function collectGitnexusHits(
       }
     }
   };
-  // GitNexus "upstream" = what depends on this = pb-codegraph "dependents" (incoming).
+  // the legacy tool's "upstream" = what depends on this = pb-codegraph "dependents" (incoming).
   merge(up.byDepth, 'incoming');
-  // GitNexus "downstream" = what this depends on = pb-codegraph "dependencies" (outgoing).
+  // the legacy tool's "downstream" = what this depends on = pb-codegraph "dependencies" (outgoing).
   merge(down.byDepth, 'outgoing');
 
   return { hits: [...byFilePath.values()], found, rootNode: rootNode as { id: string; name: string } | undefined };
@@ -205,22 +205,22 @@ function collectGitnexusHits(
 
 function classifySymbol(entry: SymbolEntry, resultsDir: string): SymbolClassification {
   const newStackRaw = readJson(path.join(resultsDir, `${entry.label}.new-stack.json`));
-  const gitnexusUpstreamRaw = readJson(path.join(resultsDir, `${entry.label}.gitnexus.upstream.json`));
-  const gitnexusDownstreamRaw = readJson(path.join(resultsDir, `${entry.label}.gitnexus.downstream.json`));
+  const legacyUpstreamRaw = readJson(path.join(resultsDir, `${entry.label}.legacy.upstream.json`));
+  const legacyDownstreamRaw = readJson(path.join(resultsDir, `${entry.label}.legacy.downstream.json`));
 
   const newStack = collectNewStackHits(newStackRaw);
-  const gitnexus = collectGitnexusHits(gitnexusUpstreamRaw, gitnexusDownstreamRaw);
+  const legacy = collectLegacyHits(legacyUpstreamRaw, legacyDownstreamRaw);
 
   const newStackByKey = new Map(newStack.hits.map((h) => [`${h.direction}:${h.filePath}`, h]));
-  const gitnexusByKey = new Map(gitnexus.hits.map((h) => [`${h.direction}:${h.filePath}`, h]));
+  const legacyByKey = new Map(legacy.hits.map((h) => [`${h.direction}:${h.filePath}`, h]));
 
-  const allKeys = new Set([...newStackByKey.keys(), ...gitnexusByKey.keys()]);
+  const allKeys = new Set([...newStackByKey.keys(), ...legacyByKey.keys()]);
   const nodes: NodeClassification[] = [];
-  const counts: Record<Classification, number> = { 'both-found': 0, 'different-set': 0, 'new-stack-only': 0, 'gitnexus-only': 0 };
+  const counts: Record<Classification, number> = { 'both-found': 0, 'different-set': 0, 'new-stack-only': 0, 'legacy-only': 0 };
 
   for (const key of allKeys) {
     const ns = newStackByKey.get(key);
-    const gn = gitnexusByKey.get(key);
+    const gn = legacyByKey.get(key);
     const filePath = (ns ?? gn)!.filePath;
 
     let classification: Classification;
@@ -229,7 +229,7 @@ function classifySymbol(entry: SymbolEntry, resultsDir: string): SymbolClassific
     } else if (ns) {
       classification = 'new-stack-only';
     } else {
-      classification = 'gitnexus-only';
+      classification = 'legacy-only';
     }
     counts[classification]++;
 
@@ -237,7 +237,7 @@ function classifySymbol(entry: SymbolEntry, resultsDir: string): SymbolClassific
       file_path: filePath,
       classification,
       ...(ns ? { new_stack: { direction: ns.direction, depth: ns.depth, edge_kinds: ns.edgeKinds } } : {}),
-      ...(gn ? { gitnexus: { direction: gn.direction, depth: gn.depth, relation_types: gn.edgeKinds } } : {}),
+      ...(gn ? { legacy: { direction: gn.direction, depth: gn.depth, relation_types: gn.edgeKinds } } : {}),
     });
   }
 
@@ -248,9 +248,9 @@ function classifySymbol(entry: SymbolEntry, resultsDir: string): SymbolClassific
     category: entry.category,
     description: entry.description,
     new_stack_found: newStack.found,
-    gitnexus_found: gitnexus.found,
+    legacy_found: legacy.found,
     new_stack_root_node: newStack.rootNode,
-    gitnexus_root_node: gitnexus.rootNode,
+    legacy_root_node: legacy.rootNode,
     magento_kind_edges_new_stack: newStack.magentoEdges.map((e) => ({ file_path: e.filePath, kind: e.edgeKinds[e.edgeKinds.length - 1], depth: e.depth })),
     nodes,
     counts,
@@ -265,19 +265,19 @@ function toMarkdown(symbols: SymbolClassification[]): string {
     lines.push(sym.description);
     lines.push('');
     lines.push(`- new-stack found root symbol: ${sym.new_stack_found}`);
-    lines.push(`- gitnexus found root symbol: ${sym.gitnexus_found}`);
+    lines.push(`- legacy found root symbol: ${sym.legacy_found}`);
     lines.push(
       `- magento-kind edges (new stack only, by construction): ${sym.magento_kind_edges_new_stack.length === 0 ? 'none' : sym.magento_kind_edges_new_stack.map((e) => `${e.kind}->${e.file_path}@d${e.depth}`).join(', ')}`,
     );
     lines.push(
-      `- per-file-path classification counts: both-found=${sym.counts['both-found']}, different-set=${sym.counts['different-set']}, new-stack-only=${sym.counts['new-stack-only']}, gitnexus-only=${sym.counts['gitnexus-only']}`,
+      `- per-file-path classification counts: both-found=${sym.counts['both-found']}, different-set=${sym.counts['different-set']}, new-stack-only=${sym.counts['new-stack-only']}, legacy-only=${sym.counts['legacy-only']}`,
     );
     lines.push('');
-    lines.push('| file_path | classification | new-stack (dir@depth) | gitnexus (dir@depth) |');
+    lines.push('| file_path | classification | new-stack (dir@depth) | legacy (dir@depth) |');
     lines.push('|---|---|---|---|');
     for (const n of sym.nodes) {
       const ns = n.new_stack ? `${n.new_stack.direction}@${n.new_stack.depth}` : '-';
-      const gn = n.gitnexus ? `${n.gitnexus.direction}@${n.gitnexus.depth}` : '-';
+      const gn = n.legacy ? `${n.legacy.direction}@${n.legacy.depth}` : '-';
       lines.push(`| ${n.file_path} | ${n.classification} | ${ns} | ${gn} |`);
     }
     lines.push('');

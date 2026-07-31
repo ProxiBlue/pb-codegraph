@@ -5,7 +5,7 @@
 **Retry count**: 0
 
 ## Description
-Per-project integration replacing the gitnexus container: docs + templates for (a) project index layout (custom app/code + vendor-split DB per the 009 ignore template — shared cores excluded, 3rd-party vendor included), (b) registry file generation (project + core DBs), (c) mcps/.mcp.json gitnexus-mageos entry swap: http url → stdio command launching the shim (containers reach central core DBs via existing mount conventions — document mount addition for ~/.pb-codegraph/indexes read-only).
+Per-project integration replacing the legacy graph container: docs + templates for (a) project index layout (custom app/code + vendor-split DB per the 009 ignore template — shared cores excluded, 3rd-party vendor included), (b) registry file generation (project + core DBs), (c) mcps/.mcp.json legacy server entry swap: http url → stdio command launching the shim (containers reach central core DBs via existing mount conventions — document mount addition for ~/.pb-codegraph/indexes read-only).
 
 **Runtime/path reality to pin (critical — see _devils_advocate.md I4):**
 - Where indexing runs: the shim runs IN the ddev web container (stdio spawned by in-container claude). State explicitly whether `pb-codegraph index` (which invokes `npx @colbymchenry/codegraph`) runs in-container or on host, and confirm node/npx availability there.
@@ -16,7 +16,7 @@ Per-project integration replacing the gitnexus container: docs + templates for (
 Probe compat: pre-flight-check/wire currently curl :4747 — for v0.2.0 ship `pb-codegraph health` CLI returning 0/JSON (non-green when any repo's augmenter marker is stale) and NOTE the pb-hcf wire/pre-flight probe update as an explicit cross-plugin follow-up in docs/cutover.md (do NOT edit pb-hcf from this plan).
 
 ## Requirements (Test Descriptions)
-- [x] `it documents the full pps cutover sequence including rollback (gitnexus containers stopped not removed)` — docs/cutover.md sections "Full pps cutover sequence" + "Rollback". Test: tests/cutover-docs.test.ts.
+- [x] `it documents the full pps cutover sequence including rollback (legacy graph containers stopped not removed)` — docs/cutover.md sections "Full pps cutover sequence" + "Rollback". Test: tests/cutover-docs.test.ts.
 - [x] `it ships a registry template with container-path db entries covering project plus core repos` — templates/registry.template.json (mageos/hyva/deps + placeholder project entry, all container paths, no host paths). Test: tests/registry-template.test.ts.
 - [x] `it documents where indexing runs and confirms node/npx availability there` — docs/cutover.md section "1. Where indexing runs" (project index in-container, cores on host; node/npx/better-sqlite3-ABI check commands). Test: tests/cutover-docs.test.ts.
 - [x] `it requires a LIVE-branch check before any .ddev/mcp/registry edit` — docs/cutover.md section "0. Pre-flight: LIVE-branch check". Test: tests/cutover-docs.test.ts.

@@ -8,7 +8,7 @@
 Start mcp/ server (node, stdio MCP; @modelcontextprotocol/sdk) named for fleet compat. Registry config file (JSON, path via env PB_CODEGRAPH_REGISTRY) maps repo names → {db_path, description}: e.g. m2_pvcpipesupplies → /path/.codegraph/codegraph.db, mageos/hyva/deps → shared central DBs. Tool list_repos returns names + node/edge counts + last indexed_at + augmenter marker status per repo.
 
 ## Context
-- Fleet contract: server must be usable under the existing mcps/.mcp.json key gitnexus-mageos (stdio command entry replaces the http url entry at cutover — task 010)
+- Fleet contract: server must be usable under the fleet's existing legacy mcps/.mcp.json server key (stdio command entry replaces the http url entry at cutover — task 010)
 - Multi-db: open read-only (SQLITE_OPEN_READONLY) — shim never writes except optional re-augment trigger note (defer actual re-augment exec to wrapper; shim only WARNS in v0.2.0 — keep it read-only, simpler)
 - Read-only connections must still set `busy_timeout` and be WAL-aware (codegraph may be mid-reindex; see _devils_advocate.md C5) so a concurrent codegraph write doesn't error the read.
 - **Registry paths are CONTAINER-visible paths (see I4):** the shim runs inside the ddev web container (stdio spawned by in-container claude). Project DB path = the container mount of `.codegraph/codegraph.db`; core DB paths = the container mount point of `~/.pb-codegraph/indexes` (host path is NOT valid in-container). Task 010 pins the mount; task 005 only requires the registry loader treat `db_path` as an already-resolved container path and fail clearly if unreadable.
@@ -29,7 +29,7 @@ loader, `PB_CODEGRAPH_REGISTRY` env), `mcp/src/db.ts` (read-only sqlite opener,
 `busy_timeout`), `mcp/src/repo-status.ts` (`getRepoStatus`/`listRepoStatuses` — per-repo
 try/catch isolation, node/edge counts, `MAX(files.indexed_at)`, augmenter marker read),
 `mcp/src/server.ts` (`McpServer`, tool `list_repos`, server name pinned to fleet-compat
-`gitnexus-mageos`), `mcp/bin/server.ts` (stdio entrypoint). Added deps: `@modelcontextprotocol/sdk`
+the legacy fleet server key), `mcp/bin/server.ts` (stdio entrypoint). Added deps: `@modelcontextprotocol/sdk`
 (^1.30.0), `zod` (^4.0.0, sdk peer — declared explicitly rather than relying on hoisting).
 `tsconfig.json` `include` extended with `mcp/**/*`.
 

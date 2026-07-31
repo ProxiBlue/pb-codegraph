@@ -1,5 +1,5 @@
-// pb-codegraph: new file (not vendored). Adapts mage-os-gitnexus's
-// parsers/layout-xml-mapper.ts (GitNexus-coupled, not vendored — see task
+// pb-codegraph: new file (not vendored). Adapts the legacy augmenter's
+// parsers/layout-xml-mapper.ts (legacy-server-coupled, not vendored — see task
 // 001 scope + _devils_advocate.md C1/C3). The vendored mapper links
 // `File:<block-class.php>` -> `File:<resolved-template-path>`, neither of
 // which is a codegraph node once the template can't be found on disk. This

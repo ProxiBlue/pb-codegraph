@@ -1,5 +1,5 @@
-// pb-codegraph: new file (not vendored). Adapts mage-os-gitnexus's
-// parsers/events-xml.ts `parseAndMapEventsXml` (GitNexus-coupled, not
+// pb-codegraph: new file (not vendored). Adapts the legacy augmenter's
+// parsers/events-xml.ts `parseAndMapEventsXml` (legacy-server-coupled, not
 // vendored — see task 001 scope + _devils_advocate.md C1/C3). The vendored
 // mapper links `File:<events.xml>` -> `File:<observer.php>`, neither of
 // which is a codegraph node. This version anchors on a MINTED `event` node

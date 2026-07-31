@@ -1,7 +1,7 @@
 # Code Standards — pb-codegraph plugin repo
 
 - TypeScript strict; node 20 target; ESM. Small modules mirroring the vendored augmenter layout (parsers/ resolvers/ writer/ mcp/).
-- Vendored code (parsers, psr4/template resolvers from mage-os-gitnexus): modify minimally; every modification gets a `// pb-codegraph:` comment stating what changed (Apache-2.0 §4 modification notice + reviewability).
+- Vendored code (parsers, psr4/template resolvers from the legacy augmenter): modify minimally; every modification gets a `// pb-codegraph:` comment stating what changed (Apache-2.0 §4 modification notice + reviewability).
 - SQLite: better-sqlite3; connections in shim are READ-ONLY with busy_timeout; writer uses single transaction per augment run; respect WAL if set by codegraph.
 - Provenance discipline: every row the augmenter writes carries provenance='pb-codegraph-augmenter'; never mutate codegraph-owned rows.
 - Shell: bash, set -euo pipefail where safe, shellcheck-clean, mktemp + cleanup traps, NEVER touch any project .git (fleet hard rule).
