@@ -1,6 +1,6 @@
 # Task 003: Node-id resolver adaptation
 
-**Status**: pending
+**Status**: completed
 **Depends on**: 001, 002
 **Retry count**: 0
 
@@ -16,14 +16,22 @@ REWRITE (not adapt — the vendored resolvers/node-id.ts is filesystem/synthetic
 - psr4-map.ts resolver vendored in 001 helps map file paths
 
 ## Requirements (Test Descriptions)
-- [ ] `it characterizes codegraph qualified_name format for classes and methods from the fixture`
-- [ ] `it resolves an fqcn from di xml to the indexed class node id`
-- [ ] `it resolves a class method target to the method node when indexed`
-- [ ] `it resolves a File:relpath endpoint to the class node defined in that file`
-- [ ] `it mints deterministic event, route, and template node ids`
-- [ ] `it mints a stable external placeholder node for unresolved targets and returns the same id across repeat runs`
-- [ ] `it prefers an existing native node over minting when the symbol is now indexed`
-- [ ] `it never produces an edge whose source or target is missing from nodes`
+- [x] `it characterizes codegraph qualified_name format for classes and methods from the fixture` — pinned in tests/node-id-resolver.test.ts against the real fixture db: class/interface qualified_name is `<namespace>::<Name>` (last `\` before the symbol becomes `::`), method qualified_name is `<owning-class-qualified-name>::<methodName>`.
+- [x] `it resolves an fqcn from di xml to the indexed class node id` — `resolveClass` in augmenter/src/resolvers/node-id.ts.
+- [x] `it resolves a class method target to the method node when indexed` — `resolveMethod` falls back to `resolveClass` when no method row matches.
+- [x] `it resolves a File:relpath endpoint to the class node defined in that file` — `resolveFileEndpoint`, accepts "File:" prefix or bare relpath; throws actionable error if the file has no class/interface row (not an external-mint case).
+- [x] `it mints deterministic event, route, and template node ids` — `mintEventId`/`mintRouteId`/`mintTemplateId`, pure functions of their inputs (no hashing/randomness needed for stability).
+- [x] `it mints a stable external placeholder node for unresolved targets and returns the same id across repeat runs` — passed immediately (no new code): `resolveClass`'s external-mint path (built for req. 2) is already a pure function of the normalized fqcn, so it was already stable by construction.
+- [x] `it prefers an existing native node over minting when the symbol is now indexed` — passed immediately (no new code): `resolveClass` always queries native `class`/`interface` rows before ever computing an external id.
+- [x] `it never produces an edge whose source or target is missing from nodes` — integration check over every endpoint declared across the fixture's 5 XML families (preference/plugin/observer/layout/webapi, plus the deliberate unresolved di.xml case).
 
 ## Acceptance Criteria
 - Resolution hit-rate over fixture = 100%; unresolved path covered by explicit test
+
+## Implementation Notes
+- New module `augmenter/src/resolvers/node-id.ts` (pure/DB-read-only, per code-standards): `normalizeFqcn`, `fqcnToQualifiedName` (characterized: codegraph turns the LAST `\` before a symbol name into `::`, i.e. `Ns\Sub\ClassName` → `Ns\Sub::ClassName`; methods append `::<methodName>` onto the owning class's own qualified_name), `resolveClass`, `resolveMethod` (falls back to `resolveClass`), `resolveFileEndpoint` (accepts `File:` prefix or bare relpath; throws actionable error on a truly-unindexed local file — distinct from `resolveClass`'s external-mint path, which is for 3rd-party/unresolved FQCNs, not local files that should already be indexed), `mintEventId`/`mintRouteId`/`mintTemplateId`/`mintExternalId`.
+- Dedup/stability (I2) achieved by construction, not by any extra bookkeeping: `resolveClass` always queries native `class`/`interface` rows FIRST; the external id is a pure function of the normalized fqcn (`magento:external:<normalized-fqcn>`), so it's automatically identical across repeat runs and automatically superseded once a native row exists — requirements 6 and 7 both passed on first write with no additional implementation, noted at the time in each requirement's checklist entry above.
+- Characterization test (`tests/node-id-resolver.test.ts`, first test) pins the exact qualified_name shapes against the real fixture DB before any resolver code existed, per the task's explicit instruction.
+- Test infra fix (in scope because it directly blocked "verify all tests pass"): `tests/node-id-resolver.test.ts` and `tests/sqlite-writer.test.ts` (task 002's file) both previously read `tests/fixture/.codegraph/codegraph.db` directly via a "copy once in test.before" pattern that races `tests/build-fixture-db.test.ts`'s destructive `rm -rf` + reinit of that same shared path under node --test's default parallel file execution — confirmed via 3+ repeat runs showing a non-deterministic failure set (classic race signature, not a logic bug: same code, different pass/fail per run). Both files switched to `tests/helpers/isolated-fixture-db.ts`'s `buildIsolatedFixtureDb()` (own temp dir + own `codegraph init`), the pattern already used by every `tests/mcp-*.test.ts` file. Remaining rarely-observed flakiness in `tests/schema-guard.test.ts` (task 008) and `tests/build-fixture-db.test.ts` (task 001) itself, which still touch the shared path by design, is out of task 003's scope and not touched here.
+- `tests/vendoring.test.ts` (task 001's file): its "node-id.ts must NOT exist" assertion was invalidated by design once task 003 created the DB-backed rewrite at that same path (intentional — see task 003's description). Updated the assertion to require the file exists but does not carry the vendored filesystem/synthetic-id implementation (checked against comment-stripped source for `class NodeIdResolver`, `fs.existsSync`, or the `${nodeType}:${filePath}:${shortName}` synthetic-id template) and does query the `nodes` table. Cross-referenced in task 001's own checklist entry with a "Task 003 addendum" note rather than silently rewriting its history.
+- Full suite (`npx tsc --noEmit`, `node --test --import tsx tests/*.test.ts`, secrets grep): all green across repeated runs after the race fix (verified 4 consecutive full-suite runs post-fix, node-id-resolver.test.ts and sqlite-writer.test.ts green in all 4; two unrelated pre-existing files remain occasionally racy as noted above).

@@ -4,7 +4,7 @@
 2026-07-31
 
 ## Status
-in_progress
+completed
 
 ## Objective
 Replace the PolyForm-NC-licensed GitNexus stack fleet-wide: colbymchenry/codegraph (MIT) supplies the PHP graph; a ported Magento augmenter injects XML-wiring edges; an MCP compat shim preserves the exact fleet contract (server gitnexus-mageos, 5 tools) so zero rules/playbooks/agents change.
@@ -40,20 +40,20 @@ Spike (host task #11, completed): codegraph 1.5.0 SQLite schema verified — nod
 ## Task Overview
 | Task | Description | Depends On | Status |
 |------|-------------|------------|--------|
-| 001 | Vendor PURE parsers/resolvers + fixture tree + corrected edge taxonomy doc | - | pending |
-| 002 | SQLite writer (kind remap, metadata, minted-node FTS, concurrency) | 001 | pending |
-| 003 | DB-backed node-id resolver (FQCN/File → codegraph ids, minted event/route/template/external) | 001, 002 | pending |
-| 003b | Adapt the 5 XML mappers to codegraph node/edge model | 001, 002, 003 | pending |
-| 004 | Augment CLI + wrapper index + staleness marker + watcher-race guard | 002, 003, 003b | pending |
-| 005 | MCP shim: server skeleton + registry (container paths) + list_repos | - | pending |
-| 006 | MCP shim: find_symbol + context | 005 | pending |
-| 007 | MCP shim: impact (recursive CTE, remapped kinds) + query templates | 005 | pending |
-| 008 | Schema-version guard + codegraph version pin | 005 | pending |
-| 009 | Shared core index build script (live-archive, no git dirs) + ignore/vendor-split conversion | - | pending |
-| 010 | ddev integration + mcp.json entry + health probe + runtime/path pinning | 004, 007, 009 | pending |
-| 011 | Acceptance harness: pps parallel diff vs GitNexus (5 symbols incl. cross-db + negative) | 010 | pending |
-| 012 | Upstream Magento-recognizer PR prep (stretch) | 004 | pending |
-| 013 | Release 0.2.0: README/CHANGELOG/docs | 001-011, 003b | pending |
+| 001 | Vendor PURE parsers/resolvers + fixture tree + corrected edge taxonomy doc | - | completed |
+| 002 | SQLite writer (kind remap, metadata, minted-node FTS, concurrency) | 001 | completed |
+| 003 | DB-backed node-id resolver (FQCN/File → codegraph ids, minted event/route/template/external) | 001, 002 | completed |
+| 003b | Adapt the 5 XML mappers to codegraph node/edge model | 001, 002, 003 | completed |
+| 004 | Augment CLI + wrapper index + staleness marker + watcher-race guard | 002, 003, 003b | completed |
+| 005 | MCP shim: server skeleton + registry (container paths) + list_repos | - | completed |
+| 006 | MCP shim: find_symbol + context | 005 | completed |
+| 007 | MCP shim: impact (recursive CTE, remapped kinds) + query templates | 005 | completed |
+| 008 | Schema-version guard + codegraph version pin | 005 | completed |
+| 009 | Shared core index build script (live-archive, no git dirs) + ignore/vendor-split conversion | - | completed |
+| 010 | ddev integration + mcp.json entry + health probe + runtime/path pinning | 004, 007, 009 | completed |
+| 011 | Acceptance harness: pps parallel diff vs GitNexus (5 symbols incl. cross-db + negative) | 010 | completed |
+| 012 | Upstream Magento-recognizer PR prep (stretch) | 004 | completed |
+| 013 | Release 0.2.0: README/CHANGELOG/docs | 001-011, 003b | completed |
 
 ## Architecture Notes
 - **Port reality (corrected after source review — see _devils_advocate.md C1):** only the pure XML parsers + psr4/template resolvers are vendored verbatim (001). The node-id resolver is a DB-backed REWRITE (003), the writer is new (002), and the 5 mappers are ADAPTED (003b) — the originals hardcode GitNexus synthetic ids, uppercase edge `type`, File-level endpoints, and a filesystem resolver.

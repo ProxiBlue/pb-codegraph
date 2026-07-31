@@ -6,21 +6,76 @@ The use case this plugin exists for: a real production incident where a cron sch
 
 This plugin gives Claude Code that same capability — without the commercial-license dependency the prior tool carried.
 
-## Status: v0.1.0 — LLM-driven impact check
+## Status: v0.2.0 — deterministic codegraph engine + retained v0.1.0 LLM flow
 
-The current version orchestrates **existing** tools (grep, the [`magento2-lsp`](https://github.com/mage-os/magento2-lsp) MCP server, XML config readers) with structured LLM reasoning. No new infrastructure: no database, no indexer, no daemon. Just a careful slash command.
+v0.2.0 adds a real, deterministic code-graph backend alongside the original
+v0.1.0 LLM-driven `/pb-codegraph:impact-check` command, which is **retained
+unchanged as a fallback**. The command auto-selects between them per project
+by checking for a `.codegraph/codegraph.db` index — see
+["Two backends, one command"](#two-backends-one-command) below.
 
-| Capability | v0.1.0 (LLM) | v0.2+ (planned tree-sitter graph) |
+**Cutover status:** acceptance-tested against pvcpipesupplies (pps) —
+**AWAITING LUCAS SIGN-OFF.** `docs/acceptance-report-pps-2026-07-31.md` documents a real
+run comparing the new graph backend against the live GitNexus container on 5
+real pps symbols, with a safety-verified read-only harness
+(`scripts/acceptance-diff.sh`). **No project has been cut over.** No
+GitNexus container has been stopped or removed by this release. Cutover
+(`docs/cutover.md`) is a deliberate, per-project, human-approved action —
+this repo ships the tooling and the evidence, not the decision.
+
+| Capability | v0.1.0 (LLM, retained) | v0.2.0 (codegraph engine) |
 |---|---|---|
-| Find direct callers of a method | grep + filter | deterministic call graph walk |
-| Resolve DI preferences (which concrete class a `Foo` argument resolves to) | via magento2-lsp MCP | via magento2-lsp + cached index |
-| Plugin chain analysis | XML scan + LLM reasoning | deterministic chain ordering |
-| Observer chain (events.xml dispatch → observers) | grep + LLM | indexed event-to-observer map |
-| Data-flow / table-write detection | heuristic regex over method body | static-analysis-grade |
-| Cron-vs-cron concurrency hazards | LLM reasoning over crontab.xml + table-write heuristic | deterministic table-touch graph |
-| Confidence levels | LLM-shaped (uses "high/medium/low" framing) | quantitative |
+| Find direct callers of a method | grep + filter | `impact` (deterministic depth-capped traversal) |
+| Resolve DI preferences (which concrete class a `Foo` argument resolves to) | via magento2-lsp MCP | `context`/`query preferences_for` (indexed `preference_for` edges) |
+| Plugin chain analysis | XML scan + LLM reasoning | `context`/`query wired_plugins_on` (indexed `wraps` edges, sortOrder+area) |
+| Observer chain (events.xml dispatch → observers) | grep + LLM | `query observers_of_event` (indexed `observes` edges via minted event nodes) |
+| Data-flow / table-write detection | heuristic regex over method body | **not yet modeled** — still the v0.1.0 heuristic (see "Known limitations") |
+| Cron-vs-cron concurrency hazards | LLM reasoning over crontab.xml + table-write heuristic | **not yet modeled** — still the v0.1.0 heuristic |
+| Confidence levels | LLM-shaped ("high/medium/low") | quantitative (depth, edge kind, staleness banner) |
 
-v0.1.0 trades precision for ship-speed. A deterministic graph (v0.2+) would catch cases the LLM misses; the LLM catches the obvious cases NOW. **Real production failures discovered with v0.1.0 should drive v0.2+ priorities** — don't guess what to index, let the misses tell you.
+Real production failures discovered with v0.1.0 drove which pieces v0.2.0
+indexes first (callers, DI, plugins, observers, routes) — table-write /
+cron-concurrency detection is deliberately still LLM-heuristic because it
+isn't indexed yet, not an oversight.
+
+## Architecture (v0.2.0)
+
+Three new pieces, all in this repo, none touching pb-hcf or any project's
+`.git`:
+
+1. **codegraph engine** — this plugin pins and drives the upstream
+   [`@colbymchenry/codegraph`](https://www.npmjs.com/package/@colbymchenry/codegraph)
+   tree-sitter PHP indexer (`shared/pinned.ts` holds the single pinned
+   version; `shared/schema-guard.ts` refuses to open a db with an
+   unsupported schema version rather than silently misreading it). It is a
+   dependency, not a fork — see `docs/upstream-pr/` for a draft contribution
+   back upstream (Magento routing recognizer, not yet submitted).
+2. **augmenter** (`augmenter/src/`) — walks a Magento module tree's
+   `di.xml`/`events.xml`/layout XML/`webapi.xml`/`routes.xml` and writes
+   Magento-specific wiring into the codegraph SQLite db as additional nodes
+   (minted `event`/`route`/`template`/`external` nodes) and edges (locked
+   lowercase kinds `preference_for`, `wraps`, `observes`, `renders`,
+   `references` — see `docs/edge-taxonomy.md` for the full contract).
+   Idempotent, transactional, every row tagged
+   `provenance='pb-codegraph-augmenter'` so a re-run or a codegraph reindex
+   never corrupts native rows. Driven by `bin/pb-codegraph.ts` (`index` /
+   `augment` / `health` subcommands).
+3. **MCP shim** (`mcp/`) — a stdio MCP server exposing `list_repos`,
+   `find_symbol`, `context`, `impact`, and `query` as deterministic,
+   read-only tools over one or more registered codegraph dbs
+   (`PB_CODEGRAPH_REGISTRY`). Served under the fleet-compat name
+   `gitnexus-mageos` so an existing project's `mcps/.mcp.json` entry, agent
+   playbooks, and rules keep working unchanged after cutover — only the
+   transport (http → stdio) and the backing implementation change.
+
+Vendored-code provenance: the pure XML parsers and path resolvers under
+`augmenter/src/parsers/` and `augmenter/src/resolvers/psr4-map.ts` /
+`template-path.ts` are vendored, minimally modified, from Lucas's own prior
+`mage-os-gitnexus` project (originally MIT, relicensed Apache-2.0 with his
+consent — see `NOTICE`). The mappers, the SQLite writer, and the DB-backed
+node-id resolver are new code, not vendored — see `NOTICE` and the code
+comments at each vendored file's top for the modification-notice trail
+(Apache-2.0 §4).
 
 ## Companion to pb-graphiti
 
@@ -53,6 +108,14 @@ Or for local development:
 }
 ```
 
+Installing the plugin ships the `/pb-codegraph:impact-check` command
+immediately (v0.1.0 LLM flow, works with zero extra setup). The v0.2.0 graph
+backend is **opt-in per project** — it activates automatically once a
+project has a `.codegraph/codegraph.db` index built and (for full MCP-tool
+access) the `gitnexus-mageos` MCP server's stdio entry swapped to
+`mcp/bin/server.ts`. See `docs/cutover.md` for the full per-project runbook;
+nothing here auto-cuts a project over.
+
 ## Usage
 
 ### `/pb-codegraph:impact-check [<file-path-or-glob>]`
@@ -62,17 +125,33 @@ Run before a deploy. Two modes:
 1. **No argument** — uses the current branch's diff against the LIVE-equivalent branch (`live`, `master`, or `HEAD~1` fallback).
 2. **With argument** — explicit file/glob scope, e.g. `app/code/Vendor/Foo/Model/TaxCertificate.php` or `app/code/Vendor/Foo/**`.
 
+#### Two backends, one command
+
+Step 0 of the command checks `.codegraph/codegraph.db` for presence:
+
+- **Present** → prefers the deterministic MCP tools (`find_symbol`,
+  `context`, `impact`, `query`) served by the `gitnexus-mageos` server for
+  callers / DI preferences / plugin chains / observer chains. Falls back to
+  the grep+LLM heuristic only for table-write and cron-concurrency detection
+  (not indexed yet) and cross-checks any result the tool flags as stale
+  (augmenter marker older than the last codegraph reindex).
+- **Absent** → runs the original v0.1.0 flow end to end: grep, the
+  [`magento2-lsp`](https://github.com/mage-os/magento2-lsp) MCP server, XML
+  config readers, structured LLM reasoning. Not a degraded mode — this is
+  the fully-supported default for any project that hasn't opted into the
+  graph backend.
+
 For each changed PHP method or XML config node, the command:
 
 1. Extracts the changed symbol(s) from the git diff
-2. Searches direct callers via grep
-3. Asks `magento2-lsp` MCP for DI preferences pointing at the changed class
-4. Scans `etc/di.xml` for plugin chains on the changed method
-5. Finds events dispatched inside the method body, traces observers in `etc/events.xml`
-6. **Detects table writes** in the method body (the data-flow piece — the tax-cert case)
+2. Searches direct callers (graph `impact`, or grep fallback)
+3. Resolves DI preferences pointing at the changed class (graph `context`/`query`, or `magento2-lsp` MCP fallback)
+4. Finds plugin chains on the changed method (graph `context`/`query`, or di.xml scan fallback)
+5. Finds events dispatched inside the method body, traces observers in `etc/events.xml` (graph `query`, or grep fallback)
+6. **Detects table writes** in the method body (the data-flow piece — the tax-cert case; always the heuristic, no graph model yet)
 7. Cross-references against other modules' read/write sites on the same tables
 8. **Flags cron-vs-cron concurrency** by reading every `etc/crontab.xml` whose job instance touches affected tables
-9. Outputs a structured impact report with confidence levels and citations
+9. Outputs a structured impact report with confidence levels, citations, and which backend answered each finding
 
 ### What the impact report looks like
 
@@ -95,29 +174,106 @@ For each changed PHP method or XML config node, the command:
 - Cron schedule change overlaps with CertExporter at midnight UTC.
   Recommend: stagger schedules OR add row-level locking OR hold deploy.
 
+## Backend used
+- GRAPH_BACKEND (augmenter marker: fresh)
+
 ## What I did NOT check (limitations)
 - ...
 ```
 
 Every claim cites a file path + line number, in keeping with the investigation protocol discipline.
 
+## Cutting a project over to the graph backend
+
+See `docs/cutover.md` for the full runbook. Summary:
+
+1. Pre-flight LIVE-branch check (mandatory before any `.ddev`/`mcp`/registry write).
+2. Build the shared, read-only "core" vendor indexes once, fleet-wide (`scripts/build-core-indexes.sh`).
+3. Apply the project's vendor-split ignore template (`templates/per-project-vendor-split.gitignore`).
+4. Build the project's own index in-container (`pb-codegraph index`), and generate `registry.json` from `templates/registry.template.json`.
+5. Swap the `mcps/.mcp.json` `gitnexus-mageos` entry from the old HTTP url to a stdio command entry launching `mcp/bin/server.ts`.
+6. Verify with `pb-codegraph health` (exit 0 + `"status": "green"`).
+7. Run `scripts/acceptance-diff.sh` against real symbols and get explicit human sign-off (see `docs/acceptance-report-pps-2026-07-31.md` for the pps template) **before** relying on the graph backend for real decisions or stopping the old GitNexus container.
+
+Rollback at any point is a container `stop` (not remove) plus reverting the
+one `mcps/.mcp.json` entry — no rebuild required.
+
+## Recovery / restore notes
+
+Nothing in this plugin is secret and nothing here requires a backed-up
+runtime artifact to restore, in keeping with the fleet
+`~/claude-skills-central/RECOVERY.md` pattern (this repo IS one of the git
+repos that pattern restores by cloning):
+
+- **The codegraph engine itself** is not vendored — it's `npx
+  @colbymchenry/codegraph@<pinned version>` (see `shared/pinned.ts`),
+  fetched from npm on demand. Nothing to restore.
+- **Per-project `.codegraph/codegraph.db` indexes** are 100% rebuildable
+  from source (`pb-codegraph index <project-root>`) — they are a cache of
+  the project's own git-tracked code, never a source of truth. Safe to
+  delete and rebuild at any time.
+- **Shared "core" vendor indexes** (mageos/hyva/deps) are equally
+  rebuildable via `scripts/build-core-indexes.sh` against any project's live
+  branch — see `docs/cutover.md` section 1.
+- **`registry.json`** (per-project, generated from
+  `templates/registry.template.json`) contains only local db paths — no
+  credentials, no host-specific absolute paths baked into shipped code (env/
+  flag-driven throughout, per `.claude/code-standards.md`'s portability
+  rule).
+- **Test fixtures** (`tests/fixture/app/`, `tests/fixture/.codegraph/`) are
+  either committed static PHP or gitignored build output
+  (`bash scripts/build-fixture-db.sh` regenerates them).
+- Nothing under this repo needs a secret to build, run, or restore. The
+  secrets grep (`grep -rE '(ff15ea68|9c111c47)' --exclude-dir=.git
+  --exclude-dir=node_modules .`) is part of the release sweep specifically
+  to keep it that way.
+
+## Development
+
+Test/build/lint commands live in `.claude/testing.md`; code conventions
+(TypeScript strictness, vendored-code modification-notice discipline,
+SQLite/provenance rules, MCP output shape) live in
+`.claude/code-standards.md`. In short:
+
+- `npx tsc --noEmit` — strict TypeScript over `augmenter/`, `mcp/`,
+  `shared/`, `bin/`, `scripts/`, and `tests/` (`docs/upstream-pr/` is
+  intentionally excluded — see below).
+- `node --test --import tsx tests/*.test.ts` — the full unit/integration
+  suite (unit tests against a fixture Magento module tree and a real
+  pinned-codegraph-built fixture db; `tests/helpers/isolated-fixture-db.ts`
+  gives each test file its own private db copy so `node --test`'s default
+  parallel file execution can't race the shared fixture rebuild).
+- `docker run --rm -v "$PWD":/w koalaman/shellcheck:stable /w/scripts/<file>.sh` — shell lint for everything under `scripts/`.
+- `docs/vendor-dir-verification.md` — the empirical evidentiary record backing `docs/cutover.md`'s vendor-directory handling claims (real host paths/output from a live run, not a template).
+- `docs/upstream-pr/` is a **deliverable-as-documents** subtree (a draft spec + implementation for contributing back to upstream `colbymchenry/codegraph`, including its own `__tests__/`). It is styled for that upstream repo's own tooling (e.g. vitest-shaped imports), not this one — deliberately excluded from this repo's `tsc` include set and never picked up by this repo's `tests/*.test.ts` glob.
+- `scripts/lib/*.ts` — TypeScript helpers backing `scripts/acceptance-diff.sh` (MCP client calls, GitNexus HTTP client, classification); type-checked as part of the same `tsc` run as the rest of the repo.
+
 ## Dependencies
 
-- **`magento2-lsp` MCP server** — strongly recommended. Without it, the command falls back to pure grep + XML parsing, which loses DI resolution and plugin chain semantics. Install via the [mage-os/magento2-lsp](https://github.com/mage-os/magento2-lsp) project.
+- **`@colbymchenry/codegraph`** (pinned, see `shared/pinned.ts`) — the tree-sitter PHP indexer the v0.2.0 engine drives. Fetched via `npx` on demand, not vendored.
+- **`better-sqlite3`** — synchronous SQLite bindings used by the augmenter's writer and the MCP shim's read-only db opener; must load in-container (native ABI — see `docs/cutover.md`).
+- **`@modelcontextprotocol/sdk`** — the MCP shim's stdio server implementation.
+- **`magento2-lsp` MCP server** — used by the v0.1.0 LLM fallback flow (and by the graph flow's still-heuristic table-write/cron-concurrency steps). Without it, those steps fall back to pure grep + XML parsing. Install via the [mage-os/magento2-lsp](https://github.com/mage-os/magento2-lsp) project.
 - **`gh` CLI** — only if you want the command to cite the affecting PRs/tickets in the report. Optional.
-- **PHP-Parser / tree-sitter** — NOT a runtime dependency yet. Reserved for v0.2+ when the deterministic graph indexer ships.
 
-## Roadmap to v0.2+
+## Known limitations (v0.2.0)
 
-The LLM approach will miss things — that's known. The roadmap follows production failures, not guesses:
+- **Table-write / cron-concurrency detection is not indexed** — the augmenter models XML wiring, not PHP method bodies' data flow. Still the v0.1.0 heuristic regardless of backend. Tracked as a future roadmap item, not silently glossed over.
+- **`wraps` metadata omits `before`/`after`/`around`** — Magento's per-method plugin execution order requires parsing the plugin class's method-name prefixes, not just di.xml. Deferred; see `docs/edge-taxonomy.md`.
+- **`routes.xml` mints a route node but no controller edge** — Magento resolves `frontName → controller` by URL convention, not declaration, so there's nothing in routes.xml to resolve that edge from. Documented honestly in `docs/edge-taxonomy.md` rather than faked.
+- **Native `references` edges are not augmenter-exclusive** — codegraph's own indexer independently emits `references` edges (surfaced by the pps acceptance run, 652 native rows vs 2 augmenter rows in that scratch index); needs a provenance-column-based disambiguation fix in a follow-up task. See `docs/acceptance-report-pps-2026-07-31.md` "Known limitations".
+- **No cutover has happened yet** — every project still runs the old GitNexus container (or the v0.1.0-only LLM flow) until a human explicitly runs the cutover runbook and reviews an acceptance report for that project.
 
-1. **v0.1.x — Refine the LLM command** as failure modes surface. Track which cases the LLM misses; tighten the prompt and add specific bash checks for those.
-2. **v0.2.0 — Static call graph indexer**. Tree-sitter-php-based. Walks `app/code/` on demand or on git change. Stores nodes (classes, methods) + edges (CALLS, EXTENDS, IMPLEMENTS) in a local Neo4j instance (reuse pb-graphiti's if running). MCP tool `pb-codegraph:callers(symbol)` for deterministic lookups.
-3. **v0.3.0 — Magento wiring resolver**. DI preference resolution + plugin chain ordering + virtualType expansion. Cooperates with magento2-lsp where overlap exists.
-4. **v0.4.0 — Data-flow analysis**. Static detection of table writes via ResourceModel inheritance, getConnection() calls, and repository pattern. The tax-cert detector becomes deterministic, not heuristic.
-5. **v0.5.0 — Continuous reindex daemon**. Watches git for changes; reindexes incrementally. Keeps the graph current.
+## Roadmap
 
-Each step is a real chunk of work (~1-4 weeks). Order may shift based on which v0.1.0 misses cost the most.
+The v0.2.0 engine's own roadmap follows the same "let production misses
+drive priorities" discipline v0.1.0 used:
+
+1. **Post-0.2.0** — resolve the `references` collision (known limitation above), decide on cutover for pps and subsequent projects based on Lucas's sign-off on the acceptance report.
+2. **Data-flow analysis** — static detection of table writes via ResourceModel inheritance, `getConnection()` calls, and repository pattern, so the tax-cert detector becomes deterministic instead of heuristic.
+3. **Plugin execution order** — parse plugin class method-name prefixes (`before`/`after`/`around`) to complete the `wraps` metadata.
+4. **Upstream contribution** — submit the Magento routing recognizer drafted in `docs/upstream-pr/` to `colbymchenry/codegraph`, if Lucas decides to.
+5. **Continuous reindex** — watch git for changes and reindex incrementally instead of on-demand.
 
 ## Why this exists
 

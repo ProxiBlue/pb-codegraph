@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!--
+  New for this PR (not part of pb-codegraph task 001's original fixture,
+  which only carried a frontend routes.xml) — added to exercise the
+  adminhtml area half of the frontName -> area -> path -> controller action
+  convention this recognizer statically encodes. Follows the same
+  frontName/module pairing shape as the sibling
+  fixtures/app/code/Acme/ModuleB/etc/frontend/routes.xml file.
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:App/etc/routes.xsd">
+    <router id="admin">
+        <route id="moduleb" frontName="moduleb">
+            <module name="Acme_ModuleB" before="Magento_Backend" />
+        </route>
+    </router>
+</config>

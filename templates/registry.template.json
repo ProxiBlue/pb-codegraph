@@ -1,0 +1,18 @@
+{
+  "<project-name>": {
+    "db_path": "/var/www/html/.codegraph/codegraph.db",
+    "description": "Project custom code (app/code, app/design, ...) plus non-core vendor/* packages. Built by running `pb-codegraph index` against the project root inside the web container with templates/per-project-vendor-split.gitignore applied at the project root (excludes vendor/mage-os and vendor/hyva-themes; every other vendor/* package stays indexed). Replace <project-name> with the ddev sitename."
+  },
+  "mageos": {
+    "db_path": "/mounts/pb-codegraph-core/mageos/.codegraph/codegraph.db",
+    "description": "Shared, read-only core index of vendor/mage-os. Built centrally by scripts/build-core-indexes.sh --only mageos and mounted read-only into every project's web container — see docs/cutover.md \"Read-only core-index mount\"."
+  },
+  "hyva": {
+    "db_path": "/mounts/pb-codegraph-core/hyva/.codegraph/codegraph.db",
+    "description": "Shared, read-only core index of vendor/hyva-themes. Built centrally by scripts/build-core-indexes.sh --only hyva and mounted read-only into every project's web container."
+  },
+  "deps": {
+    "db_path": "/mounts/pb-codegraph-core/deps/.codegraph/codegraph.db",
+    "description": "Shared, read-only core index of curated runtime PHP libs (composer/semver, composer/ca-bundle, laminas/*, ...). Built centrally by scripts/build-core-indexes.sh --only deps and mounted read-only into every project's web container."
+  }
+}

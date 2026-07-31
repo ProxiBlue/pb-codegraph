@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <!--
+      Unresolved-target case (deliberate): Magento\Catalog\Model\Product is a
+      real Magento core class but has NO PHP file anywhere in this fixture
+      tree. This exercises external-node minting (magento:external:<fqcn>)
+      in task 003 — the plugin target FQCN cannot be resolved to a local
+      class/file node.
+    -->
+    <type name="Magento\Catalog\Model\Product">
+        <plugin name="unresolved_plugin" type="Acme\ModuleA\Plugin\FooPlugin" sortOrder="5" />
+    </type>
+</config>

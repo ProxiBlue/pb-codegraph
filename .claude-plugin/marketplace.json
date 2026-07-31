@@ -8,8 +8,8 @@
     {
       "name": "pb-codegraph",
       "source": "./",
-      "description": "Cross-module impact analysis for Magento 2 / Mage-OS — detect blast radius of code changes before deploy. v0.1.0 ships an LLM-driven impact check that orchestrates existing tools (grep, magento2-lsp MCP, config XML parsing) to flag affected modules, observers, crons, and data dependencies. Roadmap: deterministic tree-sitter symbol graph in v0.2+.",
-      "version": "0.1.0",
+      "description": "Cross-module impact analysis for Magento 2 / Mage-OS — detect blast radius of code changes before deploy. v0.2.0 ships a deterministic codegraph-backed engine (augmenter + MCP shim, graph-backed find_symbol/context/impact/query tools) alongside the original v0.1.0 LLM-driven impact check (grep, magento2-lsp MCP, config XML parsing), auto-selected per project by the presence of a `.codegraph/codegraph.db` index. pps cutover acceptance-tested; awaiting sign-off before default rollout.",
+      "version": "0.2.0",
       "license": "Apache-2.0",
       "keywords": [
         "magento",

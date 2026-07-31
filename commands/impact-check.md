@@ -1,5 +1,5 @@
 ---
-description: Cross-module impact analysis for a Magento 2 / Mage-OS code change. Identifies what depends on the changed code — callers, DI preferences, plugin chains, observers, crons, and data dependencies — so you can spot blast radius BEFORE deploying. Combines grep, magento2-lsp MCP, config XML reading, and structured LLM reasoning.
+description: Cross-module impact analysis for a Magento 2 / Mage-OS code change. Identifies what depends on the changed code — callers, DI preferences, plugin chains, observers, crons, and data dependencies — so you can spot blast radius BEFORE deploying. Uses the deterministic pb-codegraph graph backend when a `.codegraph/codegraph.db` index is present; otherwise falls back to the original grep + magento2-lsp MCP + structured LLM flow.
 argument-hint: <file-path-or-glob>  (or omit to use current branch's diff vs live)
 ---
 
@@ -8,6 +8,55 @@ You are running an impact-check on Magento 2 / Mage-OS code changes. Your job is
 This is the high-stakes feature that historically saved 1000s of customer tax configurations from being clobbered by a cron-on-deploy. Be thorough, cite evidence, and flag your confidence level.
 
 ---
+
+## Step 0 — detect the backend (graph-backed vs legacy LLM)
+
+Before doing anything else, check whether this project has a pb-codegraph
+graph index:
+
+```bash
+test -f .codegraph/codegraph.db && echo GRAPH_BACKEND || echo LEGACY_LLM
+```
+
+(In a ddev-based Magento project this resolves to
+`/var/www/html/.codegraph/codegraph.db` inside the web container — the same
+fixed approot convention `templates/registry.template.json` documents.)
+
+- **`GRAPH_BACKEND`** — a codegraph index exists. Prefer the deterministic
+  MCP tools served by the `gitnexus-mageos` server (task 010's cutover swaps
+  that server's stdio command to `mcp/bin/server.ts`, so no new server name
+  needs to be learned): `find_symbol`, `context`, `impact`, and `query`. Use
+  these instead of steps 3a-3d's grep/`magento2-lsp` heuristics wherever they
+  cover the same ground:
+  - **Callers / dependents** (was 3a): call `impact` with
+    `direction: "dependents"` on the changed symbol instead of grepping.
+  - **DI preferences pointing at the class** (was 3b): call `context` on the
+    changed class and read the `preference_for` neighbor group, or `query`
+    with template `preferences_for`.
+  - **Plugin chains** (was 3c): `context`'s `wraps` neighbor group, or
+    `query` with template `wired_plugins_on`.
+  - **Event → observer chains** (was 3d): `query` with template
+    `observers_of_event`, or `context`'s `observes` neighbor group for the
+    minted event node.
+  - Before trusting the results, check the tool response for a
+    `non_authoritative`/`warning` staleness banner (the augmenter marker is
+    older than the last codegraph reindex) — if present, treat the graph
+    results as a starting point and cross-check with the legacy grep flow
+    for that symbol rather than reporting them as deterministic.
+  - **Table-write / cron-concurrency detection (3e) has no graph-backend
+    equivalent yet** (v0.2's augmenter does not model table writes) — always
+    run step 3e's heuristic regardless of backend.
+  - See `docs/query-cookbook.md` for each `query` template's params and the
+    old GitNexus cypher query it replaces.
+- **`LEGACY_LLM`** — no index present (or the `gitnexus-mageos` MCP server
+  isn't reachable). Fall back to the original flow below unchanged: grep,
+  `magento2-lsp` MCP, and structured LLM reasoning for every step. This is
+  not a degraded mode to apologize for — it is the documented v0.1.0
+  behavior and remains fully supported.
+
+Either way, continue with Steps 1-2 to establish the change set and the
+working symbol list; the backend choice only changes which mechanism
+answers Step 3's questions.
 
 ## Step 1 — establish the change set
 
@@ -41,7 +90,12 @@ Changed symbols:
 
 ## Step 3 — for each changed PHP method, find the impact surface
 
-For EACH method on the working list, gather the following evidence. Use bash, grep, Read, AND the `magento2-lsp` MCP server (it's the source of truth for Magento config wiring):
+For EACH method on the working list, gather the following evidence. If Step 0
+detected `GRAPH_BACKEND`, prefer the deterministic `impact`/`context`/`query`
+MCP tools listed there for 3a-3d and note in the report that the graph
+backend answered them; otherwise (or for anything the graph doesn't cover,
+like 3e) use bash, grep, Read, AND the `magento2-lsp` MCP server (it's the
+source of truth for Magento config wiring):
 
 ### 3a. Direct callers
 ```bash
@@ -112,8 +166,13 @@ Output a structured markdown report:
   - Add row-level locking on the import path, OR
   - Hold the deploy until both crons are reviewed together
 
+## Backend used
+- GRAPH_BACKEND (deterministic `impact`/`context`/`query` via `.codegraph/codegraph.db`) — augmenter marker: fresh|stale, OR
+- LEGACY_LLM (grep + magento2-lsp + LLM reasoning) — no index present
+
 ## What I did NOT check (limitations)
-- LLM-driven analysis: I traced what grep + magento2-lsp could surface. Indirect call chains beyond 2 hops may be missed.
+- If GRAPH_BACKEND: table-write/cron-concurrency detection (3e) has no graph equivalent in v0.2 and was always done via the legacy heuristic; any symbol the graph reported with a staleness warning was cross-checked with grep rather than trusted outright.
+- If LEGACY_LLM: I traced what grep + magento2-lsp could surface. Indirect call chains beyond 2 hops may be missed.
 - Vendor modules: only checked vendor/ if explicitly referenced; full vendor cross-reference would require deeper indexing.
 - Composer dependencies: did not check `composer.json` for downstream package consumers.
 

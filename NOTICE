@@ -20,3 +20,31 @@ pb-codegraph is the companion plugin to pb-graphiti
 
 See README.md for full design notes and the roadmap to a deterministic
 tree-sitter symbol graph in v0.2+.
+
+------------------------------------------------------------------------
+
+Vendored code: Magento/Mage-OS XML augmenter (augmenter/src/parsers/,
+augmenter/src/resolvers/)
+
+Source: mage-os-gitnexus/augmenter (github.com/ProxiBlue/mage-os-gitnexus,
+private companion repo), originally written by Lucas van Staden /
+Proxiblue and licensed MIT there.
+
+Only the pure XML parsers (`parsers/di-xml.ts`, `parsers/layout-xml.ts`,
+plus the parse-only `parseSingle*`/`find*Files` functions extracted from
+`parsers/events-xml.ts`, `parsers/webapi-xml.ts`, `parsers/routes-xml.ts`)
+and the path resolvers (`resolvers/psr4-map.ts`,
+`resolvers/template-path.ts`) were vendored into this repository. The
+GitNexus-coupled writer (`writer/lbug-writer.ts`), the filesystem-based
+node-id resolver (`resolvers/node-id.ts`), and the XML-to-GitNexus-graph
+mapper bodies (`*-mapper.ts` / `mapAndParse*` functions) were NOT vendored
+— they are re-implemented from scratch against the codegraph SQLite schema
+in this repository's own tasks 002/003/003b.
+
+Relicense compatibility: because the original MIT-licensed code and this
+Apache-2.0 repository share the same copyright holder (Lucas van Staden /
+Proxiblue), relicensing the vendored portions under Apache-2.0 for this
+repository is permitted — MIT imposes no restriction preventing the
+copyright holder from redistributing their own code under a different
+license. Modifications made during vendoring are marked inline with
+`// pb-codegraph:` comments per this repository's code-standards.md.

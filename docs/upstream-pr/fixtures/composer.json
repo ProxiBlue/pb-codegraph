@@ -1,0 +1,8 @@
+{
+  "name": "acme/example-project",
+  "description": "New for this PR — minimal composer.json exercising magentoResolver.detect()'s primary composer.json signal (a magento/ dependency). Not part of pb-codegraph task 001's fixture, which has no project-root composer.json.",
+  "require": {
+    "php": "~8.1.0||~8.2.0",
+    "magento/framework": "103.0.*"
+  }
+}

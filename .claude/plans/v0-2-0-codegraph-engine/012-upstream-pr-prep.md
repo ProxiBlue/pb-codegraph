@@ -1,6 +1,6 @@
 # Task 012: Upstream Magento-recognizer PR prep (stretch)
 
-**Status**: pending
+**Status**: completed
 **Depends on**: 004
 **Retry count**: 0
 
@@ -8,9 +8,15 @@
 Non-blocking: prepare (not necessarily submit) an upstream contribution to colbymchenry/codegraph adding a Magento recognizer for routes.xml + webapi.xml → route nodes + references edges, following the Drupal *.routing.yml recognizer pattern. Deliverable = docs/upstream-pr/ with the proposed recognizer spec, test fixtures reusing task 001's tree, and a CONTRIBUTING-conformant draft. Actual submission = Lucas's call.
 
 ## Requirements (Test Descriptions)
-- [ ] `it specifies route node and edge shapes matching codegraph's native route model`
-- [ ] `it maps frontname area path to controller action classes per magento routing convention`
-- [ ] `it includes fixture files exercising frontend and webapi routes`
+- [x] `it specifies route node and edge shapes matching codegraph's native route model` — `docs/upstream-pr/magento-recognizer-spec.md` §3/§4: reuses the existing `route` `NodeKind` and `references` `EdgeKind` from upstream `src/types.ts` verbatim (confirmed by fetching that file from `colbymchenry/codegraph`'s `main` branch) — no new kind introduced. Edge direction (route node is the source) corrected mid-task to match `drupalResolver.extract`'s actual `fromNodeId: routeNode.id` precedent after reading `src/resolution/frameworks/drupal.ts` directly, rather than pb-codegraph's own local (opposite-direction, unrelated-consumer) augmenter convention.
+- [x] `it maps frontname area path to controller action classes per magento routing convention` — spec §4.2: `routes.xml` frontName declarations are joined in a `postExtract` cross-file pass (mirroring `nestjs.ts`'s `RouterModule.register` prefix-fixup pattern) against a `Controller/<Path>/<Action>.php` directory-convention scan, covering both frontend and adminhtml areas plus the `index/index` default-action elision case. Implemented in `docs/upstream-pr/src/magento.ts` (`collectFrontNames`, `extractControllerRoute`, `magentoResolver.postExtract`).
+- [x] `it includes fixture files exercising frontend and webapi routes` — `docs/upstream-pr/fixtures/app/code/Acme/ModuleB/etc/frontend/routes.xml` and `.../etc/webapi.xml` (verbatim copies of task 001's `tests/fixture/app/code/Acme/ModuleB/` tree), plus a new adminhtml `routes.xml` and two new controller PHP fixtures (`Controller/Index/Index.php`, `Controller/Adminhtml/Widget/Edit.php`) exercising the area/elision cases the frontend-only original fixture didn't cover. Provenance documented per-file in `fixtures/README.md`. All XML fixtures are well-formed (`python3 -m json.tool` / `xml.dom.minidom.parse`); all PHP fixtures pass `php -l`.
 
 ## Acceptance Criteria
-- Draft complete enough that a PR is a copy-paste job
+- [x] Draft complete enough that a PR is a copy-paste job — `docs/upstream-pr/PR_DESCRIPTION.md` is a ready-to-paste PR body (summary, why, file list, design notes, test-plan checklist, out-of-scope follow-ups) in upstream's own README table-row + `CLAUDE.md` test-command style (no `CONTRIBUTING.md` exists upstream — confirmed 404 via the GitHub contents API — so this draft follows the closest available convention instead). `docs/upstream-pr/src/magento.ts` and `docs/upstream-pr/__tests__/magento.test.ts` are drop-in files (target paths named in each file's header comment); both pass a `tsc --noEmit --noResolve` syntax check (only expected cross-repo module-resolution errors remain, documented in `docs/upstream-pr/README.md`'s "Before this is submitted" section — no real checkout of `colbymchenry/codegraph` was available in this sandbox to run the tests for real).
+
+## Implementation Notes
+- Deliverable lives entirely under `docs/upstream-pr/` (README index, `magento-recognizer-spec.md`, `PR_DESCRIPTION.md`, `src/magento.ts`, `__tests__/magento.test.ts`, `fixtures/`). Nothing was opened upstream — no PR, no issue, per the task's explicit instruction. Submission remains Lucas's call.
+- Upstream research was done by fetching `colbymchenry/codegraph`'s `main` branch directly (raw README, `CLAUDE.md`, `src/types.ts`, `src/resolution/types.ts`, `src/resolution/frameworks/{drupal,nestjs,laravel}.ts`, `__tests__/drupal.test.ts`, and the GitHub contents API for `.github/`/`CONTRIBUTING.md` presence) rather than relying on paraphrase — every claim in the spec doc cites the specific upstream file/section it's grounded in.
+- Mid-task correction: the recognizer's edge direction was initially drafted to match pb-codegraph's own local `docs/edge-taxonomy.md` convention (class node → route node) before `drupal.ts` was actually read; once read, `drupalResolver.extract`'s `flushRoute` showed the opposite (`fromNodeId: routeNode.id` — route is the source). Corrected in both the spec and `src/magento.ts` to follow the upstream precedent, with an explicit note in the spec explaining why the two projects reasonably differ (independent downstream consumer vs. upstream cross-framework consistency).
+- Scope is routing only (`routes.xml` + `webapi.xml`); `di.xml`/`events.xml`/layout XML are explicitly out of scope and flagged as separate future PRs, both in the spec and the PR description's "Out of scope / follow-ups" section — matches pb-codegraph's own local augmenter's family split, but is a scope choice for the upstream PR's reviewability, not a technical constraint.
