@@ -552,7 +552,15 @@ export function reconcileWraps(staticFacts: StaticWrapFact[], runtimeFacts: Runt
       continue;
     }
     matchedKeys.add(key);
-    const sortOrderAgrees = staticMatches.some((f) => (f.sortOrder ?? 0) === runtimeFact.sortOrder);
+    // An ABSENT graph sortOrder (di.xml `<plugin>` with no `sortOrder`
+    // attribute -- see di-xml.ts) must never be treated as drift: `null`
+    // means "no declaration to disagree with runtime", not "declared 0".
+    // Only an EXPLICIT graph sortOrder that disagrees with runtime counts
+    // as SORTORDER_DRIFT (found via verify-wiring on real pps data,
+    // 2026-07-31 -- GrandTotalDetailsPlugin flagged graph 0 vs runtime 1,
+    // where the graph "0" was this parser's own former default-fill, not a
+    // declaration).
+    const sortOrderAgrees = staticMatches.some((f) => f.sortOrder == null || f.sortOrder === runtimeFact.sortOrder);
     if (sortOrderAgrees) {
       matched.push({ targetFqcn: runtimeFact.targetFqcn, pluginFqcn: runtimeFact.instanceFqcn, sortOrder: runtimeFact.sortOrder });
     } else {
@@ -581,26 +589,58 @@ export interface ObservesReconciliation {
   graphOnly: StaticObserveFact[];
 }
 
+/**
+ * Magento's runtime event-list(area=X) MERGES `global`-scoped observers into
+ * every area's result set (real Magento semantics: a global observer fires in
+ * every area, not just "global" requests) -- so a runtime fact for a
+ * global-declared observer can be reported tagged under ANY queried area
+ * (frontend/adminhtml/...), not just "global" (found via verify-wiring on
+ * real pps data, 2026-07-31). A `global` graph edge must therefore match a
+ * runtime fact reported under any area; an area-specific graph edge
+ * (frontend/adminhtml/...) still matches only its own area -- Magento does
+ * NOT merge area-scoped observers into other areas.
+ */
 export function reconcileObserves(
   staticFacts: StaticObserveFact[],
   runtimeFacts: RuntimeEventEntry[],
 ): ObservesReconciliation {
-  const staticKeys = new Set(staticFacts.map((f) => factKey([f.area, f.event, f.observerFqcn])));
-  const matchedKeys = new Set<string>();
+  const staticExactKeys = new Set(staticFacts.map((f) => factKey([f.area, f.event, f.observerFqcn])));
+  const globalStaticKeys = new Set(
+    staticFacts.filter((f) => f.area === 'global').map((f) => factKey([f.event, f.observerFqcn])),
+  );
+
+  const matchedExactKeys = new Set<string>();
+  const matchedGlobalKeys = new Set<string>();
   const matched: ObservesMatch[] = [];
   const missingFromGraph: RuntimeEventEntry[] = [];
 
   for (const runtimeFact of runtimeFacts) {
-    const key = factKey([runtimeFact.area, runtimeFact.event, runtimeFact.classFqcn]);
-    if (staticKeys.has(key)) {
-      matchedKeys.add(key);
+    const exactKey = factKey([runtimeFact.area, runtimeFact.event, runtimeFact.classFqcn]);
+    const globalKey = factKey([runtimeFact.event, runtimeFact.classFqcn]);
+    const hasGlobalStatic = globalStaticKeys.has(globalKey);
+
+    if (staticExactKeys.has(exactKey)) {
+      matchedExactKeys.add(exactKey);
+      // The runtime fact may exactly match a `global` static fact reported
+      // back under its own "global" area (e.g. the direct area=global
+      // query) -- that also covers it for the graphOnly check below, which
+      // only ever looks at matchedGlobalKeys for `global` static facts.
+      if (hasGlobalStatic) matchedGlobalKeys.add(globalKey);
+      matched.push({ area: runtimeFact.area, event: runtimeFact.event, observerFqcn: runtimeFact.classFqcn });
+    } else if (hasGlobalStatic) {
+      // Covered by a `global` static fact reported under a different
+      // (merged) area -- e.g. graph area=global, runtime area=adminhtml.
+      matchedGlobalKeys.add(globalKey);
       matched.push({ area: runtimeFact.area, event: runtimeFact.event, observerFqcn: runtimeFact.classFqcn });
     } else {
       missingFromGraph.push(runtimeFact);
     }
   }
 
-  const graphOnly = staticFacts.filter((f) => !matchedKeys.has(factKey([f.area, f.event, f.observerFqcn])));
+  const graphOnly = staticFacts.filter((f) => {
+    if (f.area === 'global') return !matchedGlobalKeys.has(factKey([f.event, f.observerFqcn]));
+    return !matchedExactKeys.has(factKey([f.area, f.event, f.observerFqcn]));
+  });
 
   return { matched, missingFromGraph, graphOnly };
 }

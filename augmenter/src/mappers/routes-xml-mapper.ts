@@ -16,6 +16,7 @@
 import fs from 'fs';
 import path from 'path';
 import { parseSingleRoutesXml, findRoutesXmlFiles } from '../parsers/routes-xml.ts';
+import { magentoScanRoots } from '../parsers/scan-roots.ts';
 import { mintRouteId } from '../resolvers/node-id.ts';
 import type { AugmentEdge, AugmentNode } from '../writer/sqlite-writer.ts';
 
@@ -35,10 +36,9 @@ export async function mapRoutesXmlEdges(projectRoot: string): Promise<RoutesMapp
   const nodes: AugmentNode[] = [];
   const mintedRouteIds = new Set<string>();
 
-  const searchDirs = [path.join(projectRoot, 'vendor'), path.join(projectRoot, 'app', 'code')];
+  const searchDirs = magentoScanRoots(projectRoot);
 
   for (const searchDir of searchDirs) {
-    if (!fs.existsSync(searchDir)) continue;
 
     for (const area of AREAS) {
       for (const { file } of findRoutesXmlFiles(searchDir, area)) {

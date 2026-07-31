@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { magentoScanRoots } from './scan-roots.ts';
 import { XMLParser } from 'fast-xml-parser';
 
 export interface LayoutBlockTemplate {
@@ -86,10 +87,7 @@ export function parseSingleLayoutXml(xmlContent: string, sourceFile: string, are
 export async function parseLayoutXml(projectRoot: string): Promise<LayoutXmlResult> {
   const results: LayoutBlockTemplate[] = [];
 
-  const searchRoots = [
-    path.join(projectRoot, 'vendor'),
-    path.join(projectRoot, 'app', 'code'),
-  ];
+  const searchRoots = magentoScanRoots(projectRoot);
 
   for (const searchRoot of searchRoots) {
     if (!fs.existsSync(searchRoot)) continue;

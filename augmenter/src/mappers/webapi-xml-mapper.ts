@@ -13,6 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import type Database from 'better-sqlite3';
 import { parseSingleWebapiXml, findWebapiXmlFiles } from '../parsers/webapi-xml.ts';
+import { magentoScanRoots } from '../parsers/scan-roots.ts';
 import { resolveMethod, mintRouteId } from '../resolvers/node-id.ts';
 import type { AugmentEdge, AugmentNode } from '../writer/sqlite-writer.ts';
 
@@ -34,10 +35,9 @@ export async function mapWebapiXmlEdges(projectRoot: string, db: Database.Databa
   const mintedRouteIds = new Set<string>();
   let resolved = 0;
 
-  const searchDirs = [path.join(projectRoot, 'vendor'), path.join(projectRoot, 'app', 'code')];
+  const searchDirs = magentoScanRoots(projectRoot);
 
   for (const searchDir of searchDirs) {
-    if (!fs.existsSync(searchDir)) continue;
 
     const files = await findWebapiXmlFiles(searchDir);
     for (const file of files) {

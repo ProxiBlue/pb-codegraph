@@ -10,6 +10,8 @@ import fs from 'fs';
 import path from 'path';
 import type Database from 'better-sqlite3';
 import { parseSingleEventsXml, findEventsXmlFiles } from '../parsers/events-xml.ts';
+import { magentoScanRoots } from '../parsers/scan-roots.ts';
+import { areaOrdinal } from './area-ordinal.ts';
 import { resolveClass, mintEventId } from '../resolvers/node-id.ts';
 import type { AugmentEdge, AugmentNode } from '../writer/sqlite-writer.ts';
 
@@ -51,10 +53,9 @@ export async function mapEventsXmlEdges(projectRoot: string, db: Database.Databa
   let skippedDisabled = 0;
 
   const mintedEventIds = new Set<string>();
-  const searchDirs = [path.join(projectRoot, 'vendor'), path.join(projectRoot, 'app', 'code')];
+  const searchDirs = magentoScanRoots(projectRoot);
 
   for (const searchDir of searchDirs) {
-    if (!fs.existsSync(searchDir)) continue;
 
     const files = await findEventsXmlFiles(searchDir);
     for (const file of files) {
@@ -94,6 +95,13 @@ export async function mapEventsXmlEdges(projectRoot: string, db: Database.Databa
           type: 'CALLS',
           reason: `magento:events:observer:${obs.eventName}`,
           metadata: { event: obs.eventName, area },
+          // Per-area edge identity (see mappers/area-ordinal.ts): the SAME
+          // observer can be registered on the SAME event in MULTIPLE areas
+          // (etc/events.xml global + etc/adminhtml/events.xml, etc.) --
+          // without a distinguishing `line`, the second area's edge collides
+          // with the first on codegraph's (source, target, kind, line, col)
+          // unique index and is silently dropped.
+          line: areaOrdinal(area),
         });
         resolved++;
       }

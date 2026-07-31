@@ -204,6 +204,61 @@ test('it reconciles observes facts into matched/missing-from-graph/graph-only', 
   assert.equal(result.graphOnly[0].event, 'admin_only_event');
 });
 
+test('it does not flag SORTORDER_DRIFT when the graph sortOrder is absent (undeclared), only when it EXPLICITLY disagrees', () => {
+  // Evidence (pps live run, 2026-07-31): GrandTotalDetailsPlugin flagged
+  // DRIFT graph=0 vs runtime=1 -- the "0" was di-xml.ts's own default-fill
+  // for an undeclared sortOrder attribute, not a real declaration. An
+  // EXPLICIT graph sortOrder of 0 that disagrees with runtime must still
+  // be flagged as real drift.
+  const staticFacts: StaticWrapFact[] = [
+    { dbLabel: 'project', edgeId: 1, pluginFqcn: 'Acme\\Plugin\\NoOrder', targetFqcn: 'Acme\\Model\\Foo', sortOrder: null, area: 'global' },
+    { dbLabel: 'project', edgeId: 2, pluginFqcn: 'Acme\\Plugin\\Explicit', targetFqcn: 'Acme\\Model\\Foo', sortOrder: 0, area: 'global' },
+  ];
+  const runtimeFacts = [
+    { targetFqcn: 'Acme\\Model\\Foo', pluginName: 'no_order', instanceFqcn: 'Acme\\Plugin\\NoOrder', sortOrder: 1 },
+    { targetFqcn: 'Acme\\Model\\Foo', pluginName: 'explicit', instanceFqcn: 'Acme\\Plugin\\Explicit', sortOrder: 1 },
+  ];
+
+  const result = reconcileWraps(staticFacts, runtimeFacts);
+
+  assert.equal(result.matched.length, 1, 'absent graph sortOrder must be treated as matched, not drift');
+  assert.equal(result.matched[0].pluginFqcn, 'Acme\\Plugin\\NoOrder');
+  assert.equal(result.sortOrderDrift.length, 1, 'an EXPLICIT graph sortOrder of 0 that disagrees with runtime must still be flagged as drift');
+  assert.equal(result.sortOrderDrift[0].pluginFqcn, 'Acme\\Plugin\\Explicit');
+});
+
+test('it matches a global graph observe edge against a runtime fact reported under ANY queried area (merged-area semantics)', () => {
+  // Magento's event-list(area=frontend) MERGES global observers into the
+  // frontend result set (real Magento semantics: global observers fire in
+  // every area) -- the runtime fact for a global-declared observer is
+  // reported tagged with the QUERIED area ("frontend" here), not "global".
+  const staticFacts: StaticObserveFact[] = [
+    { dbLabel: 'project', edgeId: 1, area: 'global', event: 'render', observerFqcn: 'Magento\\Csp\\Observer\\Render' },
+  ];
+  const runtimeFacts = [
+    { area: 'adminhtml', event: 'render', observerName: 'csp_render', classFqcn: 'Magento\\Csp\\Observer\\Render' },
+  ];
+
+  const result = reconcileObserves(staticFacts, runtimeFacts);
+  assert.equal(result.matched.length, 1, 'a global static fact must cover a runtime fact reported under any area');
+  assert.equal(result.missingFromGraph.length, 0);
+  assert.equal(result.graphOnly.length, 0, 'the global static fact is covered by the merged-area runtime fact, not graph-only');
+});
+
+test('it does NOT match an area-specific graph observe edge against a runtime fact from a DIFFERENT area', () => {
+  const staticFacts: StaticObserveFact[] = [
+    { dbLabel: 'project', edgeId: 1, area: 'adminhtml', event: 'admin_only_event', observerFqcn: 'Acme\\Observer\\Admin' },
+  ];
+  const runtimeFacts = [
+    { area: 'frontend', event: 'admin_only_event', observerName: 'x', classFqcn: 'Acme\\Observer\\Admin' },
+  ];
+
+  const result = reconcileObserves(staticFacts, runtimeFacts);
+  assert.equal(result.matched.length, 0, 'an area-specific graph edge must only match runtime facts from its OWN area');
+  assert.equal(result.missingFromGraph.length, 1);
+  assert.equal(result.graphOnly.length, 1);
+});
+
 test('it reconciles preference_for facts into matched/missing-from-graph/graph-only', () => {
   const staticFacts: StaticPreferenceFact[] = [
     { dbLabel: 'project', edgeId: 1, implFqcn: 'Acme\\Model\\Foo', interfaceFqcn: 'Acme\\Api\\FooInterface', area: 'global' },

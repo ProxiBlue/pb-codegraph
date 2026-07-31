@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { magentoScanRoots } from './scan-roots.ts';
 import { XMLParser } from 'fast-xml-parser';
 
 export interface DiPreference {
@@ -13,7 +14,12 @@ export interface DiPlugin {
   targetType: string;
   pluginType: string;
   pluginName: string;
-  sortOrder: number;
+  /** `undefined` when the `sortOrder` attribute is ABSENT from the `<plugin>`
+   * element (Magento applies its own runtime default in that case) -- NEVER
+   * defaulted to 0 here, because 0 is itself a real, explicit declared value
+   * (see verify-wiring.ts's SORTORDER_DRIFT classification, which must be
+   * able to tell "explicitly 0" apart from "not declared at all"). */
+  sortOrder: number | undefined;
   disabled: boolean;
   sourceFile: string;
   area: string;
@@ -87,7 +93,7 @@ export function parseSingleDiXml(xmlContent: string, sourceFile: string, area: s
 
       if (!pluginType || !pluginName || disabled) continue;
 
-      const sortOrder = pl['@_sortOrder'] != null ? Number(pl['@_sortOrder']) : 0;
+      const sortOrder = pl['@_sortOrder'] != null ? Number(pl['@_sortOrder']) : undefined;
 
       plugins.push({ targetType, pluginType, pluginName, sortOrder, disabled: false, sourceFile, area });
     }
@@ -127,10 +133,7 @@ export async function parseDiXml(projectRoot: string): Promise<DiXmlResult> {
   const preferences: DiPreference[] = [];
   const plugins: DiPlugin[] = [];
 
-  const searchDirs = [
-    path.join(projectRoot, 'vendor'),
-    path.join(projectRoot, 'app', 'code'),
-  ];
+  const searchDirs = magentoScanRoots(projectRoot);
 
   for (const searchDir of searchDirs) {
     if (!fs.existsSync(searchDir)) continue;

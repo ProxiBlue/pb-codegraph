@@ -71,18 +71,24 @@ test(
 
       // 3. Verify all six edge families + counts.
       const afterAugment = edgeKindCounts(fixture.dbPath);
+      // preference_for/wraps/observes carry +1 each over the "one edge per
+      // family" baseline: tests/fixture/app/code/Acme/ModuleC/etc/adminhtml/
+      // {di,events}.xml deliberately duplicate ModuleA/ModuleB's global (resp.
+      // frontend) preference/plugin/observer registrations under adminhtml --
+      // the per-area edge identity regression fixture (see
+      // augmenter/src/mappers/area-ordinal.ts).
       assert.deepEqual(afterAugment, {
-        preference_for: 1,
-        wraps: 2,
-        observes: 2,
+        preference_for: 2,
+        wraps: 3,
+        observes: 3,
         renders: 1,
         references: 1,
       });
       const totalsAfterAugment = totalCounts(fixture.dbPath);
       assert.equal(
         Object.values(afterAugment).reduce((a, b) => a + b, 0),
-        7,
-        'expected 7 total augmenter-owned edges across all six families',
+        10,
+        'expected 10 total augmenter-owned edges across all six families',
       );
 
       // 4. codegraph reindex — the REAL cascade-wipe, not a simulation.

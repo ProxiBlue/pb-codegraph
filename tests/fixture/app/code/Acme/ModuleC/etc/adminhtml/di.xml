@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!--
+  Multi-area collapse regression fixture (verify-wiring live pps run,
+  2026-07-31): Magento modules can register the SAME preference/plugin on
+  the SAME for/target class in MULTIPLE areas -- real core example:
+  Magento\Tax's GrandTotalDetailsPlugin is declared in both global and
+  frontend di.xml. This file duplicates ModuleA's etc/di.xml (global)
+  preference and plugin declarations for the SAME for/target pair, scoped to
+  adminhtml instead -- exercising the per-area edge identity fix
+  (mappers/area-ordinal.ts) rather than silently colliding on codegraph's
+  (source, target, kind, line, col) unique index.
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <preference for="Acme\ModuleA\Api\FooInterface" type="Acme\ModuleA\Model\Foo" />
+    <type name="Acme\ModuleA\Model\Foo">
+        <plugin name="foo_plugin_adminhtml" type="Acme\ModuleA\Plugin\FooPlugin" sortOrder="20" />
+    </type>
+</config>

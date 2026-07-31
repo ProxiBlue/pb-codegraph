@@ -8,6 +8,7 @@
 // "wraps metadata scope".
 import type Database from 'better-sqlite3';
 import { parseDiXml } from '../parsers/di-xml.ts';
+import { areaOrdinal } from './area-ordinal.ts';
 import { resolveClass, type ResolvedNode } from '../resolvers/node-id.ts';
 import type { AugmentEdge, AugmentNode } from '../writer/sqlite-writer.ts';
 
@@ -75,6 +76,13 @@ export async function mapDiXmlEdges(projectRoot: string, db: Database.Database):
       type: 'IMPLEMENTS',
       reason: 'magento:di:preference',
       metadata: { area: pref.area },
+      // Per-area edge identity (see mappers/area-ordinal.ts): di.xml permits
+      // the SAME preference for/type pair to be declared in MULTIPLE areas
+      // (etc/di.xml global + etc/adminhtml/di.xml, etc.) -- without a
+      // distinguishing `line`, the second area's edge collides with the
+      // first on codegraph's (source, target, kind, line, col) unique index
+      // and is silently dropped.
+      line: areaOrdinal(pref.area),
     });
     preferencesResolved++;
   }
@@ -96,6 +104,14 @@ export async function mapDiXmlEdges(projectRoot: string, db: Database.Database):
       type: 'WRAPS',
       reason: 'magento:di:plugin',
       metadata: { sortOrder: plug.sortOrder, area: plug.area },
+      // Per-area edge identity (see mappers/area-ordinal.ts): di.xml permits
+      // the SAME plugin+target pair to be declared in MULTIPLE areas
+      // (real core example: Magento\Tax's GrandTotalDetailsPlugin in both
+      // global and frontend di.xml) -- without a distinguishing `line`, the
+      // second area's edge collides with the first on codegraph's
+      // (source, target, kind, line, col) unique index and is silently
+      // dropped.
+      line: areaOrdinal(plug.area),
     });
     pluginsResolved++;
   }

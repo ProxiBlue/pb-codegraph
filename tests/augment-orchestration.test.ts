@@ -11,19 +11,25 @@ import { AUGMENTER_RUN_AT_KEY, AUGMENTER_FILES_INDEXED_AT_KEY } from '../mcp/src
 import { buildIsolatedFixtureDb, type IsolatedFixtureDb } from './helpers/isolated-fixture-db.ts';
 
 // Ground truth for tests/fixture/app, characterized against a real
-// `codegraph init` run (see this task's session notes) — 1 preference_for,
-// 2 wraps (one native target, one external-minted target), 2 observes
-// (controller_action_predispatch, checkout_cart_save_after), 1 renders, 1
-// references (webapi only — routes.xml mints a route node but never an
-// edge, see docs/edge-taxonomy.md "Route honesty note").
+// `codegraph init` run (see this task's session notes) — 2 preference_for,
+// 3 wraps (one native target, one external-minted target, plus the
+// ModuleC/etc/adminhtml multi-area duplicate), 3 observes
+// (controller_action_predispatch, checkout_cart_save_after x2 areas), 1
+// renders, 1 references (webapi only — routes.xml mints a route node but
+// never an edge, see docs/edge-taxonomy.md "Route honesty note"). The +1 on
+// preference_for/wraps/observes over the "one edge per family" baseline is
+// tests/fixture/app/code/Acme/ModuleC/etc/adminhtml/{di,events}.xml, which
+// deliberately duplicates ModuleA/ModuleB's global (resp. frontend)
+// registrations under adminhtml — the per-area edge identity regression
+// fixture (see augmenter/src/mappers/area-ordinal.ts).
 const EXPECTED_EDGE_KIND_COUNTS: Record<string, number> = {
-  preference_for: 1,
-  wraps: 2,
-  observes: 2,
+  preference_for: 2,
+  wraps: 3,
+  observes: 3,
   renders: 1,
   references: 1,
 };
-const EXPECTED_TOTAL_EDGES = 7;
+const EXPECTED_TOTAL_EDGES = 10;
 
 let fixture: IsolatedFixtureDb;
 
@@ -70,9 +76,9 @@ test('it augments the fixture project producing all six edge families with corre
   const dbPath = freshDbPath();
   const result = await runAugment(fixture.dir, dbPath);
 
-  assert.equal(result.families.diPreferences.resolved, 1);
-  assert.equal(result.families.diPlugins.resolved, 2);
-  assert.equal(result.families.events.resolved, 2);
+  assert.equal(result.families.diPreferences.resolved, 2);
+  assert.equal(result.families.diPlugins.resolved, 3);
+  assert.equal(result.families.events.resolved, 3);
   assert.equal(result.families.layout.resolved, 1);
   assert.equal(result.families.webapi.resolved, 1);
   assert.equal(result.families.routes.routesMinted, 1);

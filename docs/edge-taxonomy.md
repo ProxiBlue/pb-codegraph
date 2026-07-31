@@ -133,6 +133,49 @@ declaring module/class to the minted `route` node; the route node stands
 mostly alone (no outgoing edge to "the" controller) in v0.2. Document this
 honestly rather than implying a resolved controller edge exists.
 
+## observes identity note (per-area edge identity via `line`)
+
+Magento modules can register the SAME observer class on the SAME event in
+MULTIPLE areas — e.g. `etc/events.xml` (global) AND
+`etc/adminhtml/events.xml` for the identical `event`+`instance` pair (real
+core example: `Magento\Csp\Observer\Render` is registered in both). The same
+applies to `wraps` (`<plugin>`) and `preference_for` (`<preference>`): di.xml
+permits the identical for/type or target/plugin pair to be declared in more
+than one area file (real core example: `Magento\Tax`'s
+`GrandTotalDetailsPlugin` is declared in both global and frontend di.xml).
+
+None of these three augmenter edge kinds have a native source-file
+line/col of their own — they are minted from XML declarations, not PHP
+symbol coordinates — so every area's edge for the same
+`(source, target, kind)` tuple used to carry the exact same
+`(line=null, col=null)` pair. codegraph's `idx_edges_identity` unique index
+is `(source, target, kind, IFNULL(line,-1), IFNULL(col,-1))`, so the second
+area's `INSERT OR IGNORE` silently dropped the row (found via verify-wiring
+on real pps data, 2026-07-31 — `Magento\Csp\Observer::Render`'s
+`etc/events.xml` (global) registration vanished, leaving only the
+`etc/adminhtml/events.xml` one on disk).
+
+**Fix (see `augmenter/src/mappers/area-ordinal.ts`):** the `wraps`,
+`observes`, and `preference_for` mappers store a stable, small, deterministic
+per-area ordinal in the edge's `line` field — this is explicitly NOT a
+source-file line number, it exists purely so the unique index treats each
+area's registration as a distinct row:
+
+| area | ordinal |
+|---|---|
+| `global` | 1 |
+| `frontend` | 2 |
+| `adminhtml` | 3 |
+| `webapi_rest` | 4 |
+| `webapi_soap` | 5 |
+| `crontab` | 6 |
+| (unrecognized area string) | 9 |
+
+`renders` and `references` (webapi/routes) are NOT affected by this fix in
+v0.2 — they were not characterized as suffering the same multi-area collapse
+in the pps run that surfaced this issue, so their `line`/`col` fields are
+unchanged.
+
 ## provenance discipline
 
 Every row the augmenter writes carries `provenance='pb-codegraph-augmenter'`.
