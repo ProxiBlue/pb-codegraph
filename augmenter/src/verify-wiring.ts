@@ -372,8 +372,15 @@ export function parseRuntimePlugins(targetFqcn: string, structuredContent: unkno
   }
   const obj = structuredContent as Record<string, unknown>;
   const plugins = obj.plugins;
-  if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) {
+  if (!plugins || typeof plugins !== 'object') {
     warnUnrecognizedPayload('plugin-list', structuredContent);
+    return [];
+  }
+  // PHP's empty assoc array (`plugins: []` in di.xml-less config) serializes to JSON `[]`,
+  // meaning ZERO plugins for this target -- not an unrecognized payload shape. Warn only on a
+  // NON-empty array (a shape bricklayer never actually emits, but still not the expected map).
+  if (Array.isArray(plugins)) {
+    if (plugins.length > 0) warnUnrecognizedPayload('plugin-list', structuredContent);
     return [];
   }
 
@@ -469,7 +476,10 @@ export function parseRuntimePreferences(structuredContent: unknown): RuntimePref
   return [];
 }
 
-export const EVENT_LIST_AREAS = ['global', 'frontend', 'adminhtml'] as const;
+// bricklayer's validAreas set can vary by version -- 'crontab'/'graphql'/'webapi_rest'/
+// 'webapi_soap' are queried best-effort (see fetchRuntimeEvents's per-area tolerance) and never
+// abort the whole fetch if a given bricklayer install doesn't recognize one of them.
+export const EVENT_LIST_AREAS = ['global', 'frontend', 'adminhtml', 'webapi_rest', 'webapi_soap', 'crontab', 'graphql'] as const;
 
 export async function fetchRuntimePlugins(client: Client, targetFqcn: string): Promise<RuntimePluginEntry[]> {
   const result = await client.callTool(
@@ -480,13 +490,45 @@ export async function fetchRuntimePlugins(client: Client, targetFqcn: string): P
   return parseRuntimePlugins(targetFqcn, result.structuredContent);
 }
 
-export async function fetchRuntimeEvents(client: Client): Promise<RuntimeEventEntry[]> {
+export interface FetchRuntimeEventsIO {
+  error: (msg: string) => void;
+}
+
+const defaultFetchRuntimeEventsIO: FetchRuntimeEventsIO = { error: (msg) => console.warn(msg) };
+
+/**
+ * Queries every EVENT_LIST_AREAS area. bricklayer's set of `validAreas` can vary by version --
+ * an individual area call failing (unrecognized area, etc.) is noted via `io.error` and skipped,
+ * never aborts the whole fetch (the other areas' real data is still worth having).
+ */
+export async function fetchRuntimeEvents(client: Client, io: FetchRuntimeEventsIO = defaultFetchRuntimeEventsIO): Promise<RuntimeEventEntry[]> {
   const all: RuntimeEventEntry[] = [];
   for (const area of EVENT_LIST_AREAS) {
-    const result = await client.callTool({ name: 'event-list', arguments: { area } }, undefined, {
-      timeout: BRICKLAYER_CALL_TIMEOUT_MS,
-    });
-    all.push(...parseRuntimeEvents(area, result.structuredContent));
+    try {
+      const result = await client.callTool({ name: 'event-list', arguments: { area } }, undefined, {
+        timeout: BRICKLAYER_CALL_TIMEOUT_MS,
+      });
+      // A tool-level failure (bricklayer throwing inside its own handler, e.g. an unrecognized
+      // area) surfaces as a normal MCP response with isError:true, NOT a thrown/rejected call —
+      // see the SDK's McpServer.createToolError. Must be checked explicitly, not just try/catch.
+      if (result.isError) {
+        const reason = Array.isArray(result.content)
+          ? result.content.map((c) => ('text' in c ? c.text : JSON.stringify(c))).join(' ')
+          : String(result.content);
+        io.error(
+          `[pb-codegraph verify-wiring] event-list area "${area}" failed — skipping (bricklayer may not ` +
+            `support this area on this version): ${reason}`,
+        );
+        continue;
+      }
+      all.push(...parseRuntimeEvents(area, result.structuredContent));
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      io.error(
+        `[pb-codegraph verify-wiring] event-list area "${area}" failed — skipping (bricklayer may not ` +
+          `support this area on this version): ${reason}`,
+      );
+    }
   }
   return all;
 }
@@ -648,11 +690,32 @@ export function reconcileObserves(
 export interface PreferencesMatch {
   interfaceFqcn: string;
   implFqcn: string;
+  /** true when the match only succeeded after stripping a trailing `\Interceptor` segment off
+   * the runtime implFqcn (see stripInterceptorSuffix) -- implFqcn above is still the RAW
+   * (un-stripped) runtime name, so the report can show what runtime actually returned while
+   * noting how it was reconciled. */
+  viaInterceptorNormalization?: boolean;
 }
 export interface PreferencesReconciliation {
   matched: PreferencesMatch[];
   missingFromGraph: RuntimePreferenceEntry[];
   graphOnly: StaticPreferenceFact[];
+}
+
+const INTERCEPTOR_SUFFIX = '\\Interceptor';
+
+/**
+ * A Magento-generated interceptor (`<Class>\Interceptor`) is a 1:1 runtime wrapper of the
+ * class it intercepts -- di.xml declares (and the static graph records) the plain class, but
+ * runtime's preference-list reports the generated interceptor FQCN once a plugin is attached to
+ * that class. Stripping ONE trailing `\Interceptor` segment recovers the class the static side
+ * actually knows about. Only ONE segment is ever stripped -- Magento never nests interceptors.
+ */
+function stripInterceptorSuffix(fqcn: string): { stripped: string; wasStripped: boolean } {
+  if (fqcn.endsWith(INTERCEPTOR_SUFFIX)) {
+    return { stripped: fqcn.slice(0, -INTERCEPTOR_SUFFIX.length), wasStripped: true };
+  }
+  return { stripped: fqcn, wasStripped: false };
 }
 
 export function reconcilePreferences(
@@ -665,13 +728,26 @@ export function reconcilePreferences(
   const missingFromGraph: RuntimePreferenceEntry[] = [];
 
   for (const runtimeFact of runtimeFacts) {
-    const key = factKey([runtimeFact.interfaceFqcn, runtimeFact.implFqcn]);
-    if (staticKeys.has(key)) {
-      matchedKeys.add(key);
+    const exactKey = factKey([runtimeFact.interfaceFqcn, runtimeFact.implFqcn]);
+    if (staticKeys.has(exactKey)) {
+      matchedKeys.add(exactKey);
       matched.push({ interfaceFqcn: runtimeFact.interfaceFqcn, implFqcn: runtimeFact.implFqcn });
-    } else {
-      missingFromGraph.push(runtimeFact);
+      continue;
     }
+
+    const { stripped, wasStripped } = stripInterceptorSuffix(runtimeFact.implFqcn);
+    const interceptorKey = wasStripped ? factKey([runtimeFact.interfaceFqcn, stripped]) : null;
+    if (interceptorKey && staticKeys.has(interceptorKey)) {
+      matchedKeys.add(interceptorKey);
+      matched.push({
+        interfaceFqcn: runtimeFact.interfaceFqcn,
+        implFqcn: runtimeFact.implFqcn, // raw (un-stripped) name kept for the report
+        viaInterceptorNormalization: true,
+      });
+      continue;
+    }
+
+    missingFromGraph.push(runtimeFact);
   }
 
   const graphOnly = staticFacts.filter((f) => !matchedKeys.has(factKey([f.interfaceFqcn, f.implFqcn])));
@@ -711,6 +787,30 @@ export function stampGraphOnlyEdges(db: Database.Database, edgeIds: number[]): n
   return run(edgeIds);
 }
 
+// --- compiled DI detection --------------------------------------------------
+
+/**
+ * Detects Magento's compiled DI cache (`bin/magento setup:di:compile` output) under
+ * `<project-root>/generated/metadata/*plugin-list.php`. bricklayer's PluginList reflection tool
+ * uses this compiled data VERBATIM when present -- a class outside the compiled set (never
+ * referenced from a compiled entry point) returns no plugins ([]) from bricklayer regardless of
+ * what di.xml actually declares for it. When this is detected, the wraps section of a
+ * verify-wiring report is non-authoritative: static-only ("graph-only") wraps rows may simply be
+ * classes the compiler never touched, not real drift. Remove `generated/metadata` (dev mode) to
+ * restore full runtime verification -- note that Magento itself also serves stale DI info from
+ * this cache while it exists, so this affects more than just this tool.
+ */
+export function detectCompiledDi(projectRoot: string): boolean {
+  const metadataDir = path.join(projectRoot, 'generated', 'metadata');
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(metadataDir);
+  } catch {
+    return false;
+  }
+  return entries.some((name) => name.endsWith('plugin-list.php'));
+}
+
 // --- report formatting ----------------------------------------------------
 
 export interface VerifyWiringSummary {
@@ -729,24 +829,44 @@ function stampedSuffix(stamp: boolean, dbLabel: string): string {
   return stamp && dbLabel === 'project' ? ' (stamped enabled_in_env=false)' : '';
 }
 
+const COMPILED_DI_BANNER = [
+  '*** COMPILED DI DETECTED (generated/metadata/*plugin-list.php present) ***',
+  '*** bricklayer\'s runtime plugin data reflects the COMPILED set only -- a class outside the',
+  '*** compiled set returns no plugins ([]) regardless of what di.xml declares for it. The wraps',
+  '*** section below is NON-AUTHORITATIVE while compiled DI is present. Remove generated/metadata',
+  '*** to restore full verification (dev-mode-with-metadata also means Magento itself serves stale',
+  '*** DI, not just this tool).',
+];
+
 export function formatVerifyWiringReport(input: {
   preferences: PreferencesReconciliation;
   wraps: WrapsReconciliation;
   observes: ObservesReconciliation;
   stamp: boolean;
+  /** true when `<project-root>/generated/metadata/*plugin-list.php` was detected (see
+   * detectCompiledDi) -- makes the wraps section's findings non-authoritative. */
+  compiledDiDetected?: boolean;
 }): VerifyWiringReport {
-  const { preferences, wraps, observes, stamp } = input;
+  const { preferences, wraps, observes, stamp, compiledDiDetected = false } = input;
   const lines: string[] = [];
 
   lines.push('=== pb-codegraph verify-wiring report ===');
   lines.push('(scope: preference_for, wraps, observes only — renders/references(routes) are out of scope)');
   lines.push('');
 
+  if (compiledDiDetected) {
+    lines.push(...COMPILED_DI_BANNER);
+    lines.push('');
+  }
+
   lines.push(
     `-- preference_for: ${preferences.matched.length} matched, ${preferences.missingFromGraph.length} missing-from-graph, ` +
       `${preferences.graphOnly.length} graph-only --`,
   );
-  for (const m of preferences.matched) lines.push(`  MATCHED     ${m.implFqcn} -> ${m.interfaceFqcn}`);
+  for (const m of preferences.matched) {
+    const note = m.viaInterceptorNormalization ? ' (matched via interceptor normalization)' : '';
+    lines.push(`  MATCHED     ${m.implFqcn} -> ${m.interfaceFqcn}${note}`);
+  }
   for (const m of preferences.missingFromGraph) {
     lines.push(`  MISSING     ${m.implFqcn} -> ${m.interfaceFqcn} (runtime only — no db has this preference)`);
   }
@@ -755,9 +875,10 @@ export function formatVerifyWiringReport(input: {
   }
   lines.push('');
 
+  const wrapsAuthoritySuffix = compiledDiDetected ? ' [non-authoritative (compiled DI present)]' : '';
   lines.push(
     `-- wraps: ${wraps.matched.length} matched, ${wraps.sortOrderDrift.length} sortorder-drift, ` +
-      `${wraps.missingFromGraph.length} missing-from-graph, ${wraps.graphOnly.length} graph-only --`,
+      `${wraps.missingFromGraph.length} missing-from-graph, ${wraps.graphOnly.length} graph-only --${wrapsAuthoritySuffix}`,
   );
   for (const m of wraps.matched) lines.push(`  MATCHED     ${m.pluginFqcn} wraps ${m.targetFqcn} (sortOrder ${m.sortOrder})`);
   for (const m of wraps.sortOrderDrift) {
@@ -788,10 +909,15 @@ export function formatVerifyWiringReport(input: {
   }
   lines.push('');
 
+  // While compiled DI is present, wraps GRAPH-ONLY rows are not a real failure signal (they may
+  // simply be classes the compiler never touched -- see detectCompiledDi) so they're excluded
+  // from the rolled-up summary total, even though they're still printed above for visibility.
+  const wrapsGraphOnlyForSummary = compiledDiDetected ? 0 : wraps.graphOnly.length;
+
   const summary: VerifyWiringSummary = {
     matched: preferences.matched.length + wraps.matched.length + observes.matched.length,
     missingFromGraph: preferences.missingFromGraph.length + wraps.missingFromGraph.length + observes.missingFromGraph.length,
-    graphOnly: preferences.graphOnly.length + wraps.graphOnly.length + observes.graphOnly.length,
+    graphOnly: preferences.graphOnly.length + wrapsGraphOnlyForSummary + observes.graphOnly.length,
     sortOrderDrift: wraps.sortOrderDrift.length,
   };
 
@@ -858,7 +984,7 @@ export async function runVerifyWiring(options: VerifyWiringOptions, io: VerifyWi
     const runtimePlugins: RuntimePluginEntry[] = [];
     const runtimePreferences: RuntimePreferenceEntry[] = [];
     try {
-      runtimeEvents = await fetchRuntimeEvents(session.client);
+      runtimeEvents = await fetchRuntimeEvents(session.client, { error: io.error });
       for (const target of distinctWrapTargets(staticFacts.wraps)) {
         runtimePlugins.push(...(await fetchRuntimePlugins(session.client, target)));
       }
@@ -890,7 +1016,8 @@ export async function runVerifyWiring(options: VerifyWiringOptions, io: VerifyWi
       }
     }
 
-    const report = formatVerifyWiringReport({ preferences, wraps, observes, stamp: options.stamp });
+    const compiledDiDetected = detectCompiledDi(options.projectRoot);
+    const report = formatVerifyWiringReport({ preferences, wraps, observes, stamp: options.stamp, compiledDiDetected });
     io.log(report.text);
 
     return report.summary.missingFromGraph === 0 ? EXIT_VERIFY_OK : EXIT_VERIFY_MISSING_FROM_GRAPH;

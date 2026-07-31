@@ -21,6 +21,10 @@ export interface FakeBricklayerFixture {
    * per-interface — see verify-wiring.ts's characterization note). Any interface not present in
    * this map gets the real tool's own "not found" shape: {filter, count:0, preferences:[]}. */
   preferences?: Record<string, Record<string, unknown>>;
+  /** Areas for which event-list should THROW instead of returning a structured payload --
+   * simulates a bricklayer version/config where a per-area call fails (see verify-wiring.ts's
+   * EVENT_LIST_AREAS tolerance). */
+  eventErrors?: string[];
 }
 
 function loadFixture(): FakeBricklayerFixture {
@@ -54,10 +58,13 @@ async function main(): Promise<void> {
       title: 'List event observers for an area (fake)',
       inputSchema: {
         eventName: z.string().optional(),
-        area: z.enum(['global', 'frontend', 'adminhtml']),
+        area: z.enum(['global', 'frontend', 'adminhtml', 'webapi_rest', 'webapi_soap', 'crontab', 'graphql']),
       },
     },
     async ({ area }) => {
+      if (fixture.eventErrors?.includes(area)) {
+        throw new Error(`fake-bricklayer: simulated event-list failure for area "${area}"`);
+      }
       const structured = fixture.events?.[area] ?? { area, total: 0, events: [] };
       return { content: [{ type: 'text' as const, text: JSON.stringify(structured) }], structuredContent: structured };
     },

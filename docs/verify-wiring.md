@@ -50,6 +50,40 @@ from an unparsed vendor tree) can never surface as MISSING_FROM_GRAPH for
 that reason alone. `observes` does not share this limitation: `event-list`
 dumps everything per area.
 
+**Interceptor normalization.** `reconcilePreferences` strips ONE trailing
+`\Interceptor` segment off a runtime `preference-list` impl FQCN before
+key-matching against the static graph — a generated Magento interceptor
+(`<Class>\Interceptor`) is a 1:1 runtime wrapper of the class a plugin was
+attached to, so runtime reports the interceptor name while di.xml (and the
+static graph) name the plain class. A match found only after this
+normalization is still reported MATCHED, keeping the RAW (interceptor)
+runtime name in the report line and noting "matched via interceptor
+normalization" so it's clear which side of the match was adjusted.
+
+## Compiled DI
+
+`detectCompiledDi` (`augmenter/src/verify-wiring.ts`) checks
+`<project-root>/generated/metadata/` for any `*plugin-list.php` file before
+reconciling `wraps`. That directory is Magento's `bin/magento
+setup:di:compile` output — when it's present, bricklayer's `plugin-list`
+tool uses the COMPILED data VERBATIM: a class outside the compiled set (one
+the compiler never touched, e.g. a class only reachable from a code path not
+exercised by compilation) returns **no plugins at all** (`[]`) regardless of
+what di.xml actually declares for it.
+
+When this is detected, `verify-wiring` prints a loud banner and marks the
+`wraps` section of the report **non-authoritative (compiled DI present)** —
+its GRAPH_ONLY rows are still printed for visibility but are excluded from
+the report's rolled-up `graphOnly` summary total, since they may simply be
+classes the compiler never touched rather than real static-only drift.
+
+**To restore full runtime verification, remove `generated/metadata`** (i.e.
+run the project in developer mode, uncompiled). Note this is not scoped to
+this tool: while `generated/metadata` exists, Magento itself also serves DI
+wiring from that compiled cache rather than the live di.xml/events.xml —
+`verify-wiring`'s wraps findings and Magento's own runtime behavior are both
+reading the same potentially-stale compiled snapshot in that state.
+
 ## Known model differences
 
 These are real, evidence-backed divergences between the static graph and
@@ -86,11 +120,30 @@ every global observer produced one false MISSING_FROM_GRAPH per
 non-"global" area it was also reported under, plus a false GRAPH_ONLY for
 the static side.
 
-### (c) The one unexplained live case — Smile\ElasticsuiteCatalog::AdjustAttributeSearchable
+### (c) Plugin-name merge across modules (same plugin name, competing declarations)
 
+**General rule:** when two modules declare a plugin (or observer) under the
+**exact same `name`** attribute on the same target, Magento's di.xml (and
+events.xml) merge-by-`name` semantics mean only ONE declaration survives at
+runtime — typically the LAST one in module-sequence order, e.g. a later
+module's `disabled="true"` declaration overriding an earlier module's
+`disabled="false"` one, regardless of which `type`/class either side names.
+The static graph parses each area/module's declaration independently and has
+no notion of this cross-module merge-by-name step, so it can end up with a
+`wraps` (or `observes`) edge for the enabled declaration while the disabling
+declaration is correctly omitted (a `disabled="true"` element is filtered per
+file) — but with no awareness that the omission was meant to override the
+first, not merely coexist with it. Implementing real cross-module
+plugin-name-merge semantics is out of scope for v0.2; this is a documented
+known limitation, not a bug to chase as a regression when triaging a
+MISSING_FROM_GRAPH / GRAPH_ONLY finding for a plugin/observer name known to
+be declared by more than one module.
+
+**Illustrative example — Smile\ElasticsuiteCatalog::AdjustAttributeSearchable.**
 Live pps run (2026-07-31) surfaced a divergence around the plugin name
-`adjust_searchable_attribute_values`. Investigated (read-only) against
-`/home/lucas/workspace/uptactics/pvcpipesupplies`'s actual vendor tree:
+`adjust_searchable_attribute_values`. Investigated (read-only) against a real
+vendor tree containing both `Magento_LayeredNavigation` (mage-os) and
+`Smile_ElasticsuiteCatalog`:
 
 - `vendor/mage-os/module-layered-navigation/etc/adminhtml/di.xml:10` declares
   `<plugin name="adjust_searchable_attribute_values"
@@ -147,6 +200,33 @@ compiled result, the two backends will disagree on whether this plugin is
 "active" for this target. Implementing real cross-module plugin-name-merge
 semantics is out of scope for v0.2 — this is logged as a known limitation,
 not fixed here.
+
+### (d) Area-scoped preferences vs. a single-context `preference-list`
+
+Live pps run (2026-08-01, after the interceptor-normalization fix in this
+doc's earlier section landed): 11 of 16 remaining `preference_for`
+MISSING_FROM_GRAPH findings shared one shape — the runtime impl, after
+stripping its `\Interceptor` suffix, is IDENTICAL to the queried interface
+itself (e.g. `Magento\GroupedProduct\Model\Product\Type\Grouped\Interceptor`
+reported as the "preference" for
+`Magento\GroupedProduct\Model\Product\Type\Grouped`), while the static graph
+has a real edge naming a DIFFERENT concrete override for that same interface
+scoped to a specific area (e.g.
+`Magento\GroupedProduct\Model\Product\Type\Grouped\Backend`, `area:
+"adminhtml"`). This means bricklayer's `preference-list` tool resolves
+against a SINGLE fixed context (its own child-process ObjectManager, not
+necessarily `adminhtml`) — an area-scoped `<preference>` that only takes
+effect in a different area than bricklayer itself runs under will never be
+visible to it; the "preference" it reports back is just the plain class
+self-intercepted (a plugin attached, no preference override active in
+bricklayer's context), not evidence the static edge is wrong. Same family of
+divergence as (b) (cross-area merge semantics for `observes`), but
+`preference-list` has no per-area argument to query around it the way
+`event-list` does. Triage any MISSING_FROM_GRAPH preference finding whose
+runtime impl (post-interceptor-stripping) equals the queried interface
+itself, where a real static edge exists for that interface scoped to a
+non-default area, as this case — not a genuine gap. Not fixed in v0.2 (no
+bricklayer-side area argument to drive it with).
 
 ## Exit codes
 

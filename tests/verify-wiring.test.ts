@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
@@ -17,6 +18,10 @@ import {
   parseRuntimeEvents,
   parseRuntimePreferences,
   formatVerifyWiringReport,
+  detectCompiledDi,
+  EVENT_LIST_AREAS,
+  openBricklayerSession,
+  fetchRuntimeEvents,
   type StaticWrapFact,
   type StaticObserveFact,
   type StaticPreferenceFact,
@@ -30,6 +35,10 @@ import { injectMagentoEdges } from './helpers/inject-magento-edges.ts';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const fakeBricklayerEntrypoint = path.join(__dirname, 'helpers', 'fake-bricklayer.ts');
+
+function fixtureTmpRoot(): string {
+  return os.tmpdir();
+}
 
 // Real node ids from the fixture (see tests/fixture/app/code/Acme/ModuleA and
 // tests/sqlite-writer.test.ts, which document the same ids).
@@ -131,6 +140,31 @@ test('it shape-tolerantly parses plugin-list/event-list/preference-list runtime 
   assert.deepEqual(parseRuntimePreferences({ filter: 'Acme\\Nope', count: 0, preferences: [] }), []);
 
   assert.deepEqual(parseRuntimePreferences({ totally_unrecognized: 1 }), []);
+});
+
+test('empty-plugins-array no-warning', () => {
+  // PHP's empty assoc array (`[]`) serializes to JSON `[]`, meaning ZERO plugins for this
+  // target — not an unrecognized payload shape. Must return [] with NO warning. A non-empty
+  // array (a shape bricklayer never actually emits, but still not the expected map) still warns.
+  const originalWarn = console.warn;
+  const warnings: unknown[][] = [];
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args);
+  };
+  try {
+    const plugins = parseRuntimePlugins('Acme\\ModuleA\\Model\\Foo', {
+      class: 'Acme\\ModuleA\\Model\\Foo',
+      plugins: [],
+    });
+    assert.deepEqual(plugins, []);
+    assert.equal(warnings.length, 0, 'empty plugins array must not warn');
+
+    const nonEmptyArrayPlugins = parseRuntimePlugins('X', { class: 'X', plugins: ['not-a-map-shape'] });
+    assert.deepEqual(nonEmptyArrayPlugins, []);
+    assert.equal(warnings.length, 1, 'a non-empty array (still not the expected map shape) must warn');
+  } finally {
+    console.warn = originalWarn;
+  }
 });
 
 test('it normalizes a leading backslash on runtime FQCNs so they key-match the (always leading-backslash-stripped) static side', () => {
@@ -276,6 +310,82 @@ test('it reconciles preference_for facts into matched/missing-from-graph/graph-o
   assert.equal(result.missingFromGraph[0].interfaceFqcn, 'Acme\\Api\\BarInterface');
   assert.equal(result.graphOnly.length, 1);
   assert.equal(result.graphOnly[0].interfaceFqcn, 'Acme\\Api\\BazInterface');
+});
+
+test('interceptor normalization match', () => {
+  // A generated Magento interceptor (`<Class>\Interceptor`) is a 1:1 runtime wrapper of the
+  // source class -- runtime's preference-list reports the interceptor FQCN as the "preference",
+  // not the plain implementation class di.xml declares. Strip ONE trailing `\Interceptor`
+  // segment before keying so this still counts as a real match, but keep the RAW (interceptor)
+  // name in the reported match so the report line can note the normalization.
+  const staticFacts: StaticPreferenceFact[] = [
+    { dbLabel: 'project', edgeId: 1, implFqcn: 'Acme\\Model\\Foo', interfaceFqcn: 'Acme\\Api\\FooInterface', area: 'global' },
+  ];
+  const runtimeFacts = [
+    { interfaceFqcn: 'Acme\\Api\\FooInterface', implFqcn: 'Acme\\Model\\Foo\\Interceptor' },
+  ];
+
+  const result = reconcilePreferences(staticFacts, runtimeFacts);
+  assert.equal(result.missingFromGraph.length, 0, 'must not be reported as missing-from-graph');
+  assert.equal(result.graphOnly.length, 0, 'must not be reported as graph-only');
+  assert.equal(result.matched.length, 1);
+  assert.equal(result.matched[0].implFqcn, 'Acme\\Model\\Foo\\Interceptor', 'raw runtime name must be kept in the match');
+  assert.equal(result.matched[0].viaInterceptorNormalization, true);
+});
+
+test('compiled-DI banner + non-authoritative wraps', () => {
+  // detectCompiledDi: false when generated/metadata doesn't exist or has no *plugin-list.php.
+  const emptyDir = fs.mkdtempSync(path.join(fixtureTmpRoot(), 'no-compiled-di-'));
+  assert.equal(detectCompiledDi(emptyDir), false, 'no generated/metadata dir at all');
+
+  const withOtherFile = fs.mkdtempSync(path.join(fixtureTmpRoot(), 'unrelated-metadata-'));
+  fs.mkdirSync(path.join(withOtherFile, 'generated', 'metadata'), { recursive: true });
+  fs.writeFileSync(path.join(withOtherFile, 'generated', 'metadata', 'interceptor-list.php'), '<?php return [];');
+  assert.equal(detectCompiledDi(withOtherFile), false, 'generated/metadata present but no *plugin-list.php file');
+
+  const withCompiledDi = fs.mkdtempSync(path.join(fixtureTmpRoot(), 'compiled-di-'));
+  fs.mkdirSync(path.join(withCompiledDi, 'generated', 'metadata'), { recursive: true });
+  fs.writeFileSync(path.join(withCompiledDi, 'generated', 'metadata', 'global-plugin-list.php'), '<?php return [];');
+  assert.equal(detectCompiledDi(withCompiledDi), true, '*plugin-list.php present under generated/metadata');
+
+  // formatVerifyWiringReport: when compiledDiDetected, a loud banner is printed, the wraps
+  // section summary line is marked non-authoritative, and wraps GRAPH-ONLY rows are excluded
+  // from the overall summary.graphOnly count (they are not a real failure signal in this state).
+  const report = formatVerifyWiringReport({
+    preferences: { matched: [], missingFromGraph: [], graphOnly: [] },
+    wraps: {
+      matched: [],
+      sortOrderDrift: [],
+      missingFromGraph: [],
+      graphOnly: [
+        { dbLabel: 'project', edgeId: 1, pluginFqcn: 'Acme\\Plugin\\A', targetFqcn: 'Acme\\Model\\Foo', sortOrder: 1, area: 'global' },
+      ],
+    },
+    observes: { matched: [], missingFromGraph: [], graphOnly: [] },
+    stamp: false,
+    compiledDiDetected: true,
+  });
+
+  assert.match(report.text, /COMPILED DI/i);
+  assert.match(report.text, /non-authoritative \(compiled DI present\)/);
+  assert.equal(report.summary.graphOnly, 0, 'wraps graph-only rows must not count toward the summary graph-only total while compiled DI is present');
+
+  // Sanity: without compiledDiDetected, the same wraps graph-only rows DO count.
+  const reportWithoutFlag = formatVerifyWiringReport({
+    preferences: { matched: [], missingFromGraph: [], graphOnly: [] },
+    wraps: {
+      matched: [],
+      sortOrderDrift: [],
+      missingFromGraph: [],
+      graphOnly: [
+        { dbLabel: 'project', edgeId: 1, pluginFqcn: 'Acme\\Plugin\\A', targetFqcn: 'Acme\\Model\\Foo', sortOrder: 1, area: 'global' },
+      ],
+    },
+    observes: { matched: [], missingFromGraph: [], graphOnly: [] },
+    stamp: false,
+  });
+  assert.equal(reportWithoutFlag.summary.graphOnly, 1);
+  assert.doesNotMatch(reportWithoutFlag.text, /COMPILED DI/i);
 });
 
 test('it formats a report grouped by category with a summary count line', () => {
@@ -605,6 +715,59 @@ test(
 
     const coreMetadataAfter = coreEdgeMetadata();
     assert.equal(coreMetadataAfter, coreMetadataBefore, 'registry (core) db edge must be untouched by --stamp');
+  },
+);
+
+test(
+  'extended-areas tolerance (fake-bricklayer: make one area error)',
+  { timeout: 120_000 },
+  async () => {
+    assert.deepEqual(
+      [...EVENT_LIST_AREAS],
+      ['global', 'frontend', 'adminhtml', 'webapi_rest', 'webapi_soap', 'crontab', 'graphql'],
+    );
+
+    const cronObserver = 'Acme\\ModuleA\\Observer\\CronObserver';
+    const fixtureFile = writeFixtureFile(fixture.dir, {
+      plugins: {},
+      events: {
+        global: { area: 'global', total: 0, events: [] },
+        frontend: { area: 'frontend', total: 0, events: [] },
+        adminhtml: { area: 'adminhtml', total: 0, events: [] },
+        webapi_rest: { area: 'webapi_rest', total: 0, events: [] },
+        webapi_soap: { area: 'webapi_soap', total: 0, events: [] },
+        crontab: {
+          area: 'crontab',
+          total: 1,
+          events: [{ event: 'cron_event', observer: 'cron_observer', class: cronObserver }],
+        },
+        // graphql intentionally omitted -- eventErrors below makes that area throw instead.
+      },
+      eventErrors: ['graphql'],
+      preferences: {},
+    });
+
+    await withEnv(
+      {
+        PB_CODEGRAPH_BRICKLAYER_CMD: `${process.execPath} --import tsx ${fakeBricklayerEntrypoint}`,
+        PB_CODEGRAPH_FAKE_BRICKLAYER_FIXTURE: fixtureFile,
+      },
+      async () => {
+        const session = await openBricklayerSession(repoRoot);
+        try {
+          const errors: string[] = [];
+          const events = await fetchRuntimeEvents(session.client, { error: (m) => errors.push(m) });
+          assert.ok(
+            events.some((e) => e.event === 'cron_event' && e.area === 'crontab'),
+            'the newly added "crontab" area must actually be queried',
+          );
+          assert.equal(errors.length, 1, 'exactly one area (graphql) failed and was noted, never aborted the whole fetch');
+          assert.match(errors[0], /graphql/);
+        } finally {
+          await session.close();
+        }
+      },
+    );
   },
 );
 
