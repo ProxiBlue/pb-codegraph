@@ -4,7 +4,7 @@
 2026-07-31
 
 ## Status
-ready
+in_progress
 
 ## Objective
 Replace the PolyForm-NC-licensed GitNexus stack fleet-wide: colbymchenry/codegraph (MIT) supplies the PHP graph; a ported Magento augmenter injects XML-wiring edges; an MCP compat shim preserves the exact fleet contract (server gitnexus-mageos, 5 tools) so zero rules/playbooks/agents change.
