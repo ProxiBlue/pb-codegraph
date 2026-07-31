@@ -36,7 +36,7 @@ test('it verifies MCP handshake and list_repos via a scripted stdio client', { t
 
     const serverVersion = client.getServerVersion();
     assert.ok(serverVersion, 'expected the server to report its Implementation info during the handshake');
-    assert.equal(serverVersion?.name, SERVER_NAME, 'server must handshake as the fleet-compat name gitnexus-mageos');
+    assert.equal(serverVersion?.name, SERVER_NAME, 'server must handshake as the fleet-compat name pb-codegraph');
 
     const result = await client.callTool({ name: 'list_repos', arguments: {} });
     const content = result.content as Array<{ type: string; text?: string }>;

@@ -41,7 +41,7 @@ gains a graph-backend detection step so both modes ship in the same plugin.
   own reindex can cascade-delete augmenter-owned rows mid-run) and a
   `pb-codegraph health` subcommand for registry-wide status checks.
 - **MCP shim** (`mcp/bin/server.ts` / `mcp/src/*.ts`) — new stdio MCP server,
-  served under the existing fleet-compat name `gitnexus-mageos` (drop-in
+  served under the existing fleet-compat name `pb-codegraph` (drop-in
   replacement for the old GitNexus HTTP endpoint at cutover, no downstream
   agent/playbook rewiring needed). Tools:
   - `list_repos` — per-registry-entry status, node/edge counts, augmenter

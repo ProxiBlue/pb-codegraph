@@ -96,7 +96,7 @@ test('it updates impact-check command with graph-backend detection', () => {
   assert.match(cmd, /legacy/i, 'command must name the legacy LLM fallback path explicitly');
   assert.match(
     cmd,
-    /gitnexus-mageos/,
+    /pb-codegraph/,
     'command must reference the fleet-compat MCP server name the shim is served under',
   );
 });

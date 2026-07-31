@@ -23,7 +23,7 @@ test -f .codegraph/codegraph.db && echo GRAPH_BACKEND || echo LEGACY_LLM
 fixed approot convention `templates/registry.template.json` documents.)
 
 - **`GRAPH_BACKEND`** — a codegraph index exists. Prefer the deterministic
-  MCP tools served by the `gitnexus-mageos` server (task 010's cutover swaps
+  MCP tools served by the `pb-codegraph` server (task 010's cutover swaps
   that server's stdio command to `mcp/bin/server.ts`, so no new server name
   needs to be learned): `find_symbol`, `context`, `impact`, and `query`. Use
   these instead of steps 3a-3d's grep/`magento2-lsp` heuristics wherever they
@@ -48,7 +48,7 @@ fixed approot convention `templates/registry.template.json` documents.)
     run step 3e's heuristic regardless of backend.
   - See `docs/query-cookbook.md` for each `query` template's params and the
     old GitNexus cypher query it replaces.
-- **`LEGACY_LLM`** — no index present (or the `gitnexus-mageos` MCP server
+- **`LEGACY_LLM`** — no index present (or the `pb-codegraph` MCP server
   isn't reachable). Fall back to the original flow below unchanged: grep,
   `magento2-lsp` MCP, and structured LLM reasoning for every step. This is
   not a degraded mode to apologize for — it is the documented v0.1.0

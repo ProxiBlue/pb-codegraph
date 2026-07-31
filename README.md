@@ -63,8 +63,8 @@ Three new pieces, all in this repo, none touching pb-hcf or any project's
 3. **MCP shim** (`mcp/`) — a stdio MCP server exposing `list_repos`,
    `find_symbol`, `context`, `impact`, and `query` as deterministic,
    read-only tools over one or more registered codegraph dbs
-   (`PB_CODEGRAPH_REGISTRY`). Served under the fleet-compat name
-   `gitnexus-mageos` so an existing project's `mcps/.mcp.json` entry, agent
+   (`PB_CODEGRAPH_REGISTRY`). Served under its native name
+   `pb-codegraph` so an existing project's `mcps/.mcp.json` entry, agent
    playbooks, and rules keep working unchanged after cutover — only the
    transport (http → stdio) and the backing implementation change.
 
@@ -112,7 +112,7 @@ Installing the plugin ships the `/pb-codegraph:impact-check` command
 immediately (v0.1.0 LLM flow, works with zero extra setup). The v0.2.0 graph
 backend is **opt-in per project** — it activates automatically once a
 project has a `.codegraph/codegraph.db` index built and (for full MCP-tool
-access) the `gitnexus-mageos` MCP server's stdio entry swapped to
+access) the `pb-codegraph` MCP server's stdio entry swapped to
 `mcp/bin/server.ts`. See `docs/cutover.md` for the full per-project runbook;
 nothing here auto-cuts a project over.
 
@@ -130,7 +130,7 @@ Run before a deploy. Two modes:
 Step 0 of the command checks `.codegraph/codegraph.db` for presence:
 
 - **Present** → prefers the deterministic MCP tools (`find_symbol`,
-  `context`, `impact`, `query`) served by the `gitnexus-mageos` server for
+  `context`, `impact`, `query`) served by the `pb-codegraph` server for
   callers / DI preferences / plugin chains / observer chains. Falls back to
   the grep+LLM heuristic only for table-write and cron-concurrency detection
   (not indexed yet) and cross-checks any result the tool flags as stale
@@ -191,7 +191,7 @@ See `docs/cutover.md` for the full runbook. Summary:
 2. Build the shared, read-only "core" vendor indexes once, fleet-wide (`scripts/build-core-indexes.sh`).
 3. Apply the project's vendor-split ignore template (`templates/per-project-vendor-split.gitignore`).
 4. Build the project's own index in-container (`pb-codegraph index`), and generate `registry.json` from `templates/registry.template.json`.
-5. Swap the `mcps/.mcp.json` `gitnexus-mageos` entry from the old HTTP url to a stdio command entry launching `mcp/bin/server.ts`.
+5. Swap the `mcps/.mcp.json` `pb-codegraph` entry from the old HTTP url to a stdio command entry launching `mcp/bin/server.ts`.
 6. Verify with `pb-codegraph health` (exit 0 + `"status": "green"`).
 7. Run `scripts/acceptance-diff.sh` against real symbols and get explicit human sign-off (see `docs/acceptance-report-pps-2026-07-31.md` for the pps template) **before** relying on the graph backend for real decisions or stopping the old GitNexus container.
 

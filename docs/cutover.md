@@ -191,7 +191,7 @@ Run in this order once sections 0-4 above are understood:
    ```
 6. **Write `registry.json`** from `templates/registry.template.json`
    (section 2), with `pvcpipesupplies` as the project key.
-7. **Swap the `mcps/.mcp.json` `gitnexus-mageos` entry** from the old
+7. **Swap the `mcps/.mcp.json` `pb-codegraph` entry** from the old
    `http://gitnexus:4747/api/mcp` url entry to a stdio command entry that
    launches the shim (`mcp/bin/server.ts`) with `PB_CODEGRAPH_REGISTRY`
    pointed at the container path of the `registry.json` written in step 6.

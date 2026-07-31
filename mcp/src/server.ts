@@ -1,7 +1,7 @@
-// MCP server skeleton for the pb-codegraph compat shim.
+// pb-codegraph MCP server — native identity (compat-shim naming dropped 2026-07-31).
 //
 // Fleet contract: this server is served under the existing mcps/.mcp.json
-// key `gitnexus-mageos` (stdio command entry replaces the http url entry at
+// key `pb-codegraph` (stdio command entry replaces the http url entry at
 // cutover — task 010), so `name` below is pinned to that key, not to
 // "pb-codegraph", to keep every existing rule/playbook/agent working
 // unchanged.
@@ -20,7 +20,7 @@ function strictStalenessFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[STRICT_STALENESS_ENV] === '1';
 }
 
-export const SERVER_NAME = 'gitnexus-mageos';
+export const SERVER_NAME = 'pb-codegraph';
 export const SERVER_VERSION = '0.2.0';
 
 export function createServer(): McpServer {
