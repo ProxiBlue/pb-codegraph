@@ -275,5 +275,10 @@ are recorded in `docs/vendor-dir-verification.md`.
   source tree so core wiring edges exist (host-side): `pb-codegraph augment vendor/mage-os
   --db ~/.pb-codegraph/indexes/mageos/.codegraph/codegraph.db` (and hyva; deps has no
   Magento XML — the run just stamps the marker fresh).
-- **CLI invocation in-container**: run from the seed repo dir so `--import tsx` resolves:
-  `cd /var/www/html/.claude/plugins-seed/marketplaces/pb-codegraph && node --import tsx bin/pb-codegraph.ts <cmd>`.
+- **CLI invocation in-container**: `pb-codegraph <cmd>` is on the container PATH (2026-11-11)
+  via a global ddev homeadditions stub (`~/.ddev/homeadditions/bin/pb-codegraph`) that execs
+  `~/claude-skills-central/scripts/pb-codegraph-cli.sh` (mounted at `/var/www/html/.claude/scripts/`).
+  The shim runs the seed's own `node_modules/.bin/tsx`, so the caller's cwd is kept and relative
+  `--registry` paths resolve against the project. Containers pick it up on their next `ddev restart`.
+  Before that, the only route was `cd <seed> && node --import tsx bin/pb-codegraph.ts <cmd>`, so
+  pb-hcf's pre-flight probe `pb-codegraph health` always failed with "command not found".
